@@ -120,6 +120,15 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
+# Clasificación semántica local de evidencias (sin llamadas a APIs de IA).
+LOCAL_SEMANTIC_ENABLED = os.environ.get("LOCAL_SEMANTIC_ENABLED", "True").lower() in ("true", "1", "yes")
+LOCAL_SEMANTIC_MODEL = os.environ.get(
+    "LOCAL_SEMANTIC_MODEL",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+)
+LOCAL_SEMANTIC_CACHE_DIR = os.environ.get("LOCAL_SEMANTIC_CACHE_DIR", str(DATA_DIR / "models"))
+LOCAL_ONLY_AI = os.environ.get("LOCAL_ONLY_AI", "False").lower() in ("true", "1", "yes")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Permitir subida de archivos de soporte grandes sin cargar en memoria para IA

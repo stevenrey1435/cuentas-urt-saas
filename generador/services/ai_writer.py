@@ -24,6 +24,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from django.conf import settings
 from .file_inspector import sanitizar_texto_para_reporte, sanitizar_texto_para_reporte
+from .semantic_matcher import puntuar_obligaciones_semanticamente
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,14 @@ def clasificar_obligacion_por_afinidad(
         for det in detalles_lista:
             if det.obligacion.numero_obligacion == num_buscado:
                 return det
+
+    # La similitud local aporta contexto semántico para nombres genéricos,
+    # documentos multidisciplinares y obligaciones que no comparten palabras exactas.
+    # Las reglas explícitas de abajo siguen teniendo prioridad en casos inequívocos.
+    puntajes_semanticos = puntuar_obligaciones_semanticamente(
+        texto_item,
+        detalles_lista,
+    )
 
     # 2. Detección de tags semánticos extraídos por OCR o PDF
     es_reunion = any(t in txt for t in (
@@ -234,7 +243,10 @@ def clasificar_obligacion_por_afinidad(
                 puntaje += 25
 
         # Penalizar ligeramente obligaciones que ya tienen muchos archivos para balancear cuando hay empate
-        puntaje_ajustado = puntaje - (det.archivos_evidencia.count() * 0.5)
+        similitud = (puntajes_semanticos or {}).get(det.obligacion.numero_obligacion, 0.0)
+        # La similitud se usa como señal adicional, sin desplazar coincidencias
+        # explícitas de etiquetas, rutas o familias documentales.
+        puntaje_ajustado = puntaje + max(0.0, similitud) * 12 - (det.archivos_evidencia.count() * 0.5)
 
         if puntaje > 0 and puntaje_ajustado > mejor_puntaje:
             mejor_puntaje = puntaje_ajustado
@@ -1156,7 +1168,7 @@ def redactar_informe_con_ia(
     motor_usado = "Modo Offline Inteligente (0 Tokens Externos)"
     payload_ia = None
 
-    if not forzar_demo:
+    if not forzar_demo and not getattr(settings, "LOCAL_ONLY_AI", False):
         # 1. Intentar Hermes Agent en cola FIFO
         payload_ia = _llamar_hermes_agent_fifo(prompt)
         if payload_ia and "obligaciones" in payload_ia:
