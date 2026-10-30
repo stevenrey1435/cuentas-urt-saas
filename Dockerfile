@@ -30,4 +30,4 @@ EXPOSE 8000
 # 1. Aplica migraciones en el disco persistente (/app/data/db.sqlite3)
 # 2. Crea automáticamente el superusuario de /admin/ si definiste DJANGO_SUPERUSER_PASSWORD
 # 3. Levanta Gunicorn con timeout de 180s para paquetes grandes
-CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn oti_cuentas.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 180"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || true) && gunicorn oti_cuentas.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 4 --timeout 180"]

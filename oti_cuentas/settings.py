@@ -122,3 +122,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Permitir subida de archivos de soporte grandes sin cargar en memoria para IA
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+
+# Configuración detrás del Proxy HTTPS de Render / Cloudflare
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+SECURE_SSL_REDIRECT = False
