@@ -127,3 +127,15 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 SECURE_SSL_REDIRECT = False
+
+
+import dj_database_url
+
+# Si existe DATABASE_URL (en Render), usa PostgreSQL.
+# Si estás en tu PC local sin esa variable, sigue usando tu db.sqlite3 de siempre.
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
+}
