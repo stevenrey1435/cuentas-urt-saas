@@ -22,7 +22,10 @@ ALLOWED_HOSTS = ["*"]
 # Soporte para orígenes HTTPS en Railway / GCP
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+    for origin in os.environ.get(
+        "CSRF_TRUSTED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,https://cuentas-urt-saas.onrender.com",
+    ).split(",")
     if origin.strip()
 ]
 
@@ -127,6 +130,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 SECURE_SSL_REDIRECT = False
+
+# Render termina TLS en su proxy y reenvía la petición HTTPS a Gunicorn.
+# Las cookies deben seguir siendo válidas en el navegador HTTPS, incluso
+# aunque la aplicación reciba internamente la conexión por HTTP.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 
 import dj_database_url

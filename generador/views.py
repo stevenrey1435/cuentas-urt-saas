@@ -1051,10 +1051,14 @@ def crear_contratista(request):
     direccion_oficina = (request.POST.get("direccion_oficina") or "Oficina de Gestión Contractual").strip()
     direccion_territorial = (request.POST.get("direccion_territorial") or "Nivel Central").strip()
     proyecto_area = (request.POST.get("proyecto_area") or direccion_oficina).strip()
-    obligaciones_texto = (request.POST.get("obligaciones_texto") or "").strip()
+    obligaciones_enviadas = request.POST.getlist("obligacion")
+    if not obligaciones_enviadas:
+        # Compatibilidad con formularios antiguos que todavía enviaban un textarea.
+        obligaciones_enviadas = [request.POST.get("obligaciones_texto") or ""]
+    obligaciones = [obligacion.strip() for obligacion in obligaciones_enviadas if obligacion.strip()]
 
-    if not nombres_apellidos or not cedula or not numero_contrato:
-        messages.error(request, "Tu nombre completo, cédula y número de contrato son obligatorios.")
+    if not nombres_apellidos or not cedula or not numero_contrato or not obligaciones:
+        messages.error(request, "Tu nombre completo, cédula, número de contrato y al menos una obligación son obligatorios.")
         return redirect("generador:dashboard")
 
     username_base = f"cto_{numero_contrato}_{cedula[-4:]}"
@@ -1100,12 +1104,11 @@ def crear_contratista(request):
         perfil.firma_imagen = request.FILES["firma_imagen"]
         perfil.save()
 
-    # Procesar obligaciones contractuales (una por línea)
-    lineas_ob = [l.strip() for l in obligaciones_texto.splitlines() if l.strip()]
-    for num_ob, linea in enumerate(lineas_ob, start=1):
-        desc_limpia = re.sub(r"^(?:obligaci[oó]n\s*\d+[:.\-\s]*|\d+\s*[.):\-]\s*)", "", linea, flags=re.IGNORECASE).strip()
+    # Procesar cada obligación enviada en su propio campo.
+    for num_ob, obligacion in enumerate(obligaciones, start=1):
+        desc_limpia = re.sub(r"^(?:obligaci[oó]n\s*\d+[:.\-\s]*|\d+\s*[.):\-]\s*)", "", obligacion, flags=re.IGNORECASE).strip()
         if not desc_limpia:
-            desc_limpia = linea
+            desc_limpia = obligacion
         ObligacionContractual.objects.create(
             contratista=perfil,
             numero_obligacion=num_ob,

@@ -152,11 +152,24 @@
                 <div class="space-y-2 pt-1 border-t border-slate-800">
                     <div class="flex items-center justify-between">
                         <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">3. Tus Obligaciones Contractuales</span>
-                        <span class="text-[10px] text-slate-400">Una por línea</span>
+                        <button type="button" onclick="agregarObligacionRegistro()"
+                                class="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition">
+                            + Agregar obligación
+                        </button>
                     </div>
-                    <textarea name="obligaciones_texto" rows="5" required
-                              placeholder="1. Desarrollar las actividades técnicas y operativas asignadas por la supervisión...&#10;2. Elaborar los informes periódicos y compilar los soportes documentales...&#10;3. Participar en las reuniones de seguimiento y mesas de trabajo..."
-                              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono-subtle focus:border-emerald-500 focus:outline-none"></textarea>
+                    <p class="text-[10px] text-slate-400">Agrega cada obligación en su propio campo.</p>
+                    <div id="lista-obligaciones-registro" class="space-y-2">
+                        <div class="flex items-start gap-2 obligacion-registro">
+                            <span class="obligacion-registro-numero text-xs font-bold text-emerald-400 pt-2.5 w-5 shrink-0">1.</span>
+                            <textarea name="obligacion" rows="2" required
+                                      placeholder="Ej: Desarrollar las actividades técnicas y operativas asignadas por la supervisión..."
+                                      class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></textarea>
+                            <button type="button" onclick="eliminarObligacionRegistro(this)"
+                                    class="text-slate-500 hover:text-red-400 text-lg leading-none pt-1.5 px-1" aria-label="Eliminar obligación">
+                                ×
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Firma Digitalizada Opcional -->
@@ -209,6 +222,42 @@
             bReg.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
             bReg.classList.add('text-slate-400');
         }
+    }
+
+    function actualizarNumerosObligacionesRegistro() {
+        document.querySelectorAll('#lista-obligaciones-registro .obligacion-registro').forEach((fila, indice) => {
+            fila.querySelector('.obligacion-registro-numero').textContent = `${indice + 1}.`;
+        });
+    }
+
+    function agregarObligacionRegistro() {
+        const lista = document.getElementById('lista-obligaciones-registro');
+        const fila = document.createElement('div');
+        fila.className = 'flex items-start gap-2 obligacion-registro';
+        fila.innerHTML = `
+            <span class="obligacion-registro-numero text-xs font-bold text-emerald-400 pt-2.5 w-5 shrink-0"></span>
+            <textarea name="obligacion" rows="2" required
+                      placeholder="Escribe otra obligación contractual..."
+                      class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"></textarea>
+            <button type="button" onclick="eliminarObligacionRegistro(this)"
+                    class="text-slate-500 hover:text-red-400 text-lg leading-none pt-1.5 px-1" aria-label="Eliminar obligación">
+                ×
+            </button>
+        `;
+        lista.appendChild(fila);
+        actualizarNumerosObligacionesRegistro();
+        fila.querySelector('textarea').focus();
+    }
+
+    function eliminarObligacionRegistro(boton) {
+        const filas = document.querySelectorAll('#lista-obligaciones-registro .obligacion-registro');
+        if (filas.length === 1) {
+            filas[0].querySelector('textarea').value = '';
+            filas[0].querySelector('textarea').focus();
+            return;
+        }
+        boton.closest('.obligacion-registro').remove();
+        actualizarNumerosObligacionesRegistro();
     }
 </script>
 {% endblock %}

@@ -260,10 +260,21 @@ class AuditoriaCalidadRedaccionTests(TestCase):
                 "direccion_oficina": "Subdirección General",
                 "direccion_territorial": "Territorial Antioquia",
                 "objeto_contrato": "Prestar servicios profesionales de apoyo técnico y administrativo en la territorial.",
-                "obligaciones_texto": "1. Elaborar informes técnicos mensuales del área.\n2. Asistir a las reuniones de seguimiento programadas.",
+                "obligacion": [
+                    "1. Elaborar informes técnicos mensuales del área.",
+                    "2. Asistir a las reuniones de seguimiento programadas.",
+                ],
             },
         )
         c_a = PerfilContratista.objects.get(cedula="1015443322")
+        self.assertEqual(c_a.obligaciones.count(), 2)
+        self.assertEqual(
+            list(c_a.obligaciones.values_list("descripcion_clausula", flat=True)),
+            [
+                "Elaborar informes técnicos mensuales del área.",
+                "Asistir a las reuniones de seguimiento programadas.",
+            ],
+        )
         self.assertEqual(c_a.pases_disponibles, 0, "Toda cuenta nueva debe nacer con 0 Pases.")
 
         # 2. Verificar que un código de otra cédula es rechazado
