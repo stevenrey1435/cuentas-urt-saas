@@ -589,7 +589,16 @@ def _limpiar_fragmento_significativo(lineas: List[str], nombre_archivo: str, nom
     return sanitizar_texto_para_reporte(base_limpia[:90]) if len(base_limpia) > 6 else ""
 
 
-def _inferir_contexto_clausula(clausula: str, num_ob: int) -> Dict[str, str]:
+def _contraer_al(texto: str) -> str:
+    """Corrige la contracción castellana en frases ensambladas por plantillas."""
+    return re.sub(r"\ba el\b", "al", texto, flags=re.IGNORECASE)
+
+
+def _inferir_contexto_clausula(
+    clausula: str,
+    num_ob: int,
+    objeto_contrato: str = "",
+) -> Dict[str, str]:
     """
     Analiza la cláusula contractual del contratista para determinar el área disciplinar
     (Jurídica, Catastral/SIG, Social, Administrativa/Financiera o Tecnológica), adaptando el título
@@ -597,6 +606,7 @@ def _inferir_contexto_clausula(clausula: str, num_ob: int) -> Dict[str, str]:
     """
     txt = (clausula or "").strip()
     low = txt.lower()
+    ctx_global = f"{low} {(objeto_contrato or '').lower()}"
     es_invalida = len(txt) < 18 or len(txt.split()) < 3
 
     if es_invalida:
@@ -612,7 +622,9 @@ def _inferir_contexto_clausula(clausula: str, num_ob: int) -> Dict[str, str]:
         }
 
     # Inferencia de Tipo de Profesión / Disciplina
-    if any(k in low for k in ("demanda", "fallo", "tutela", "juzgado", "tribunal", "auto", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
+    if any(k in ctx_global for k in ("software", "sistemas de información", "código fuente", "git", "base de datos", "arquitectura", "desarrollo")):
+        tipo_profesion = "gestión tecnológica y de sistemas"
+    elif any(k in ctx_global for k in ("demanda", "fallo", "tutela", "juzgado", "tribunal", "auto", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
         tipo_profesion = "gestión jurídica y legal"
     elif any(k in low for k in ("predio", "catastro", "catastral", "plano", "georreferenc", "ortofoto", "coordenadas", "lindero", "polígono", "poligono", "cartograf", "topográf", "geodatabase", "inspección ocular", "inspeccion ocular", "espacial")):
         tipo_profesion = "gestión técnico-predial y catastral"
@@ -625,9 +637,27 @@ def _inferir_contexto_clausula(clausula: str, num_ob: int) -> Dict[str, str]:
     else:
         tipo_profesion = "gestión profesional y técnica"
 
-    # Clasificación Temática y Acción de Cierre
-    # 1. Rama Jurídica / Legal
-    if any(k in low for k in ("defensa judicial", "tutela", "juzgado", "tribunal", "demanda", "audiencia", "procesal")):
+    # Clasificación Temática y Acción de Cierre. Las obligaciones transversales
+    # tienen prioridad para no contaminarse con el área del contrato.
+    if any(k in low for k in ("asistir a reuniones", "participar en reuniones", "asistir a las reuniones", "reuniones en modalidad")):
+        tema = "Participación en Reuniones de Coordinación, Mesas Técnicas y Comités de Seguimiento"
+        accion = "la articulación interdisciplinar, asistencia a sesiones de trabajo y seguimiento de compromisos operativos"
+    elif any(k in low for k in ("seguimientos programados", "herramienta de seguimiento", "actualizar las actividades")):
+        tema = "Seguimiento de Actividades y Actualización en la Herramienta Institucional de Control"
+        accion = "el reporte continuo de tareas, trazabilidad de avances y actualización de las herramientas de seguimiento"
+    elif any(k in low for k in ("demás actividades", "demas actividades", "encomendadas", "necesarias para garantizar el cumplimiento")):
+        tema = "Actividades Transversales de Apoyo a la Gestión y Cumplimiento Contractual"
+        accion = "el soporte transversal a las iniciativas del área y el aseguramiento integral de las metas del contrato"
+    elif any(k in low for k in ("cronograma", "estimar esfuerzos", "actividades planificadas", "compilar informes", "plan de acción")):
+        tema = "Planeación Técnica, Estimación de Esfuerzo y Seguimiento de Cronogramas de Trabajo"
+        accion = "el control de hitos, monitoreo de capacidad técnica y consolidación de informes de avance"
+
+    # 1. Clasificación específica del área
+    elif any(k in low for k in ("demanda", "fallo", "tutela", "juzgado", "tribunal", "auto", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
+        # Rama Jurídica / Legal
+        tema = "Defensa Judicial, Sustanciación Procesal y Atención de Acciones Constitucionales"
+        accion = "la oportuna defensa judicial, sustanciación técnica de memoriales y atención estricta de términos procesales"
+    elif any(k in low for k in ("defensa judicial", "tutela", "juzgado", "tribunal", "demanda", "audiencia", "procesal")):
         tema = "Defensa Judicial, Sustanciación Procesal y Atención de Acciones Constitucionales"
         accion = "la oportuna defensa judicial, sustanciación técnica de memoriales y atención estricta de términos procesales"
     elif any(k in low for k in ("concepto jurídico", "concepto legal", "proyectar actos", "resolución", "acto administrativo", "estudio jurídico")):
@@ -763,7 +793,11 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
         clausula = (det.obligacion.descripcion_clausula or "").strip()
         apuntes = (det.apuntes_contratista or "").strip()
         evidencias = list(det.archivos_evidencia.all())
-        ctx_clausula = _inferir_contexto_clausula(clausula, k)
+        ctx_clausula = _inferir_contexto_clausula(
+            clausula,
+            k,
+            objeto_contrato=informe.contratista.objeto_contrato,
+        )
 
         # Extraer apuntes reales del contratista (sin meter frases rellenas repetidas si ya hay evidencias)
         lineas_apuntes = [
@@ -865,6 +899,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                     contexto_extra=ctx_extra,
                 )
 
+            desc_pto = _contraer_al(desc_pto)
             items_numerados.append(f"{idx_ev}. {titulo_pto}: {desc_pto}")
             vinetas_desarrollo.append({
                 "titulo": titulo_pto,
@@ -888,7 +923,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                 titulo_pto = f"Gestión y Desarrollo — {ctx_clausula['tema_corto']}"
                 desc_pto = punto
 
-            desc_limpia = sanitizar_texto_para_reporte(desc_pto)
+            desc_limpia = sanitizar_texto_para_reporte(_contraer_al(desc_pto))
             titulo_limpio = sanitizar_texto_para_reporte(titulo_pto)
 
             # Si el apunte era corto, expandirlo con redacción formal
@@ -946,7 +981,9 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
             f"{ctx_clausula['accion_cierre']}, cumpliendo los estándares de calidad e inmutabilidad "
             f"de soportes y productos establecidos en los lineamientos de supervisión y gestión documental."
         )
-        texto_tabla = sanitizar_texto_para_reporte(encabezado_tabla + "\n".join(items_numerados) + cierre_tabla)
+        texto_tabla = sanitizar_texto_para_reporte(
+            _contraer_al(encabezado_tabla + "\n".join(items_numerados) + cierre_tabla)
+        )
 
         # 4. Construir bloques_evidencias para `Obligacion K.docx` y subitems para `REPORTE OTI.docx`
         bloques_evidencias = []

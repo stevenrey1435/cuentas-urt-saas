@@ -26,6 +26,7 @@ from .services.ai_writer import (
     clasificar_obligacion_por_afinidad,
     _limpiar_fragmento_significativo,
     _inferir_contexto_clausula,
+    _contraer_al,
 )
 from .services.package_builder import construir_paquete_completo_pago
 from .views import _generar_codigo_unico_cliente
@@ -109,6 +110,14 @@ class AuditoriaCalidadRedaccionTests(TestCase):
                 ctx["accion_cierre"],
                 f"Falso positivo de modelos IA en cierre de Obligación {idx}",
             )
+
+        reunion = _inferir_contexto_clausula(
+            "Asistir a reuniones de seguimiento y mesas de trabajo.",
+            12,
+            objeto_contrato="Prestar servicios profesionales de desarrollo de sistemas de información.",
+        )
+        self.assertIn("Reuniones", reunion["tema_corto"])
+        self.assertEqual(_contraer_al("orientadas a el cumplimiento contractual"), "orientadas al cumplimiento contractual")
 
     def test_02_limpieza_fragmentos_outlook_msproject_y_parentesis(self):
         """Verifica que el limpiador de extractos erradique saludos de Outlook, nombres propios y columnas de Gantt."""
