@@ -1,0 +1,524 @@
+{% extends "generador/base.html" %}
+
+{% block title %}Panel Principal | Cuentas al Día{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Tarjeta Principal de Bienvenida y Pases -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+                        Contrato N° {{ contratista.numero_contrato }} de {{ contratista.anio_contrato }}
+                    </span>
+                    <span class="text-xs text-slate-400">C.C. {{ contratista.cedula_formateada }}</span>
+                </div>
+                <h1 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                    {{ contratista.nombres_apellidos }}
+                </h1>
+                <p class="text-xs text-slate-400">
+                    Supervisor(a): <strong class="text-slate-300">{{ contratista.nombre_supervisor }}</strong>
+                </p>
+            </div>
+
+            <!-- Contador de Pases y Acción Rápida -->
+            <div class="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-2xl p-3 sm:px-4 shrink-0">
+                <div class="text-right">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Tus Pases</span>
+                    <span class="text-xl font-extrabold text-emerald-400">{{ contratista.pases_disponibles }} {% if contratista.pases_disponibles == 1 %}mes{% else %}meses{% endif %}</span>
+                </div>
+                <button type="button" onclick="abrirModalRecarga()"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
+                    <span>⚡ Recargar</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Enlaces Rápidos Secundarios -->
+        <div class="flex flex-wrap items-center gap-4 pt-4 mt-4 border-t border-slate-800/80 text-xs">
+            <button type="button" onclick="document.getElementById('seccion-editar-contrato').classList.toggle('hidden')"
+                    class="text-slate-400 hover:text-white transition flex items-center gap-1">
+                <span>✏️ Editar datos de contrato</span>
+            </button>
+            <button type="button" onclick="alternarSeccionObligaciones()"
+                    class="text-slate-400 hover:text-white transition flex items-center gap-1">
+                <span>📋 Ver u ordenar obligaciones (<span id="total-ob-badge">{{ total_obligaciones }}</span>)</span>
+            </button>
+            <button type="button" onclick="document.getElementById('seccion-firma').classList.toggle('hidden')"
+                    class="text-slate-400 hover:text-white transition flex items-center gap-1">
+                <span>✍️ Firma digitalizada {% if contratista.firma_imagen %}(✓ Configurada){% endif %}</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel Plegable: Editar Contrato -->
+    <div id="seccion-editar-contrato" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 class="text-sm font-extrabold text-white">✏️ Editar Datos de Contrato</h2>
+            <button type="button" onclick="document.getElementById('seccion-editar-contrato').classList.add('hidden')" class="text-xs text-slate-400 hover:text-white">✕ Cerrar</button>
+        </div>
+
+        <form action="{% url 'generador:editar_contratista' %}" method="post" class="space-y-3">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Nombres y Apellidos</label>
+                    <input type="text" name="nombres_apellidos" value="{{ contratista.nombres_apellidos }}" required
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Cédula</label>
+                    <input type="text" name="cedula" value="{{ contratista.cedula }}" required
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">N° Contrato / Año</label>
+                    <div class="flex gap-2">
+                        <input type="text" name="numero_contrato" value="{{ contratista.numero_contrato }}" required
+                               class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white">
+                        <input type="number" name="anio_contrato" value="{{ contratista.anio_contrato }}" required
+                               class="w-16 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Supervisor(a)</label>
+                    <input type="text" name="nombre_supervisor" value="{{ contratista.nombre_supervisor }}" required
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Cargo Supervisor(a)</label>
+                    <input type="text" name="cargo_supervisor" value="{{ contratista.cargo_supervisor }}"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Dirección / Oficina</label>
+                    <input type="text" name="direccion_oficina" value="{{ contratista.direccion_oficina }}"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Sede / Territorial</label>
+                    <input type="text" name="direccion_territorial" value="{{ contratista.direccion_territorial }}"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Fecha Inicio</label>
+                    <input type="date" name="fecha_inicio" value="{{ contratista.fecha_inicio|date:'Y-m-d' }}"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Fecha Terminación</label>
+                    <input type="date" name="fecha_terminacion_actual" value="{{ contratista.fecha_terminacion_actual|date:'Y-m-d' }}"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">
+                </div>
+            </div>
+
+            <div class="space-y-1">
+                <label class="block text-xs font-semibold text-slate-300">Objeto del Contrato</label>
+                <textarea name="objeto_contrato" rows="2" required
+                          class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white">{{ contratista.objeto_contrato }}</textarea>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
+                    Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Panel Plegable: Firma Digitalizada -->
+    <div id="seccion-firma" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 class="text-sm font-extrabold text-white">✍️ Firma Digitalizada</h2>
+            <button type="button" onclick="document.getElementById('seccion-firma').classList.add('hidden')" class="text-xs text-slate-400 hover:text-white">✕ Cerrar</button>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                {% if contratista.firma_imagen %}
+                <div class="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+                    <img src="{{ contratista.firma_imagen.url }}" alt="Firma" class="h-8 object-contain">
+                </div>
+                {% endif %}
+                <p class="text-xs text-slate-400">
+                    {% if contratista.firma_imagen %}Tu firma actual se incrusta automáticamente en los documentos Word.{% else %}Sube una foto clara de tu firma para que los informes salgan firmados.{% endif %}
+                </p>
+            </div>
+
+            <form action="{% url 'generador:actualizar_firma_contratista' %}" method="post" enctype="multipart/form-data" class="flex items-center gap-2">
+                {% csrf_token %}
+                <input type="file" name="firma_imagen" accept="image/*" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-slate-800 file:text-slate-200">
+                <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-xl text-xs font-semibold">
+                    Subir
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Panel Plegable: Obligaciones Contractuales (Sin recargas ni pérdidas de datos) -->
+    <div id="seccion-obligaciones" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+                <h2 class="text-sm font-extrabold text-white">📋 Obligaciones Contractuales Registradas (<span id="total-ob-badge-2">{{ total_obligaciones }}</span>)</h2>
+                <p class="text-xs text-slate-400">Puedes editar el texto de cualquiera o agregar nuevas sin salir de esta pantalla.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="guardarTodasObligaciones()"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
+                    <span>💾 Guardar Todas</span>
+                </button>
+                <button type="button" onclick="document.getElementById('seccion-obligaciones').classList.add('hidden')" class="text-xs text-slate-400 hover:text-white px-2 py-1">✕ Cerrar</button>
+            </div>
+        </div>
+
+        <!-- Contenedor dinámico de obligaciones -->
+        <div id="contenedor-lista-obligaciones" class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+            {% for ob in obligaciones %}
+            <div id="ob-card-{{ ob.id }}" class="card-ob-item bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-emerald-400">Obligación <span class="ob-num">{{ ob.numero_obligacion }}</span></span>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="guardarObligacionIndividual({{ ob.id }})"
+                                id="btn-save-ob-{{ ob.id }}"
+                                class="text-[11px] bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2 py-0.5 rounded-lg transition">
+                            💾 Guardar
+                        </button>
+                        <button type="button" onclick="eliminarObligacionIndividual({{ ob.id }}, {{ ob.numero_obligacion }})"
+                                class="text-[11px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded-lg transition">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <textarea id="texto-ob-{{ ob.id }}" name="ob_{{ ob.id }}" rows="2"
+                          class="input-ob-text w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none">{{ ob.descripcion_clausula }}</textarea>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Formulario para Agregar Obligación (Sin recargar pantalla) -->
+        <form id="form-agregar-obligacion" onsubmit="agregarObligacionAJAX(event)" class="pt-3 border-t border-slate-800 flex gap-2">
+            {% csrf_token %}
+            <input type="text" id="input-nueva-obligacion" name="descripcion_clausula" required
+                   placeholder="Escribe o pega una nueva obligación para agregarla..."
+                   class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+            <button type="submit" id="btn-submit-agregar"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition">
+                + Agregar
+            </button>
+        </form>
+    </div>
+
+    <!-- Sección Principal: Lista de Cuentas de Cobro + Nuevo Mes -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        <!-- Listado de Informes (2 Columnas) -->
+        <div class="lg:col-span-2 space-y-3">
+            <div class="flex items-center justify-between">
+                <h2 class="text-base font-extrabold text-white">Tus Cuentas de Cobro</h2>
+                <span class="text-xs text-slate-400">{{ informes.count }} {% if informes.count == 1 %}mes registrado{% else %}meses registrados{% endif %}</span>
+            </div>
+
+            <div class="space-y-2.5">
+                {% for inf in informes %}
+                <div class="bg-slate-900 hover:bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-extrabold text-white">
+                                Pago {{ inf.numero_pago|stringformat:"02d" }} — {{ inf.nombre_mes }} {{ inf.anio }}
+                            </span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full
+                                {% if inf.estado == 'EMPAQUETADO' %}bg-emerald-500/20 text-emerald-300
+                                {% elif inf.estado == 'REDACTADO_IA' %}bg-sky-500/20 text-sky-300
+                                {% else %}bg-amber-500/20 text-amber-300{% endif %}">
+                                {{ inf.get_estado_display }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">Emisión: {{ inf.fecha_reporte|date:"d/m/Y" }}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="{% url 'generador:detalle_informe' inf.id %}"
+                           class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs transition">
+                            Abrir Cuenta →
+                        </a>
+                        {% if inf.archivo_zip_generado %}
+                        <a href="{% url 'generador:descargar_zip_paquete' inf.id %}"
+                           class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold px-3 py-2 rounded-xl text-xs transition" title="Descargar .ZIP">
+                            ⬇ .ZIP
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 space-y-2">
+                    <p class="text-sm">No tienes cuentas de cobro creadas todavía.</p>
+                    <p class="text-xs text-slate-500">Crea el informe de este mes en el formulario de la derecha.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Formulario Rápido: + Nuevo Mes (1 Columna) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 h-fit">
+            <div>
+                <h3 class="text-sm font-extrabold text-white">+ Iniciar Nuevo Mes</h3>
+                <p class="text-xs text-slate-400">Selecciona el mes a cobrar</p>
+            </div>
+
+            <form action="{% url 'generador:crear_informe_mensual' %}" method="post" class="space-y-3">
+                {% csrf_token %}
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="space-y-1">
+                        <label class="block text-xs font-semibold text-slate-300">N° de Pago</label>
+                        <input type="number" name="numero_pago" value="1" min="1" max="24" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-xs font-semibold text-slate-300">Año</label>
+                        <input type="number" name="anio" value="2026" min="2024" max="2030" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Mes</label>
+                    <select name="mes" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                        {% for m_num, m_nom in meses_choices %}
+                        <option value="{{ m_num }}" {% if m_num == 10 %}selected{% endif %}>{{ m_nom }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300">Fecha del Reporte</label>
+                    <input type="date" name="fecha_reporte" value="{{ hoy }}" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs shadow-md transition">
+                    + Iniciar Esta Cuenta
+                </button>
+            </form>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Scripts de Gestión Asíncrona sin Recarga -->
+<script>
+    function alternarSeccionObligaciones() {
+        const sec = document.getElementById('seccion-obligaciones');
+        if (!sec) return;
+        sec.classList.toggle('hidden');
+        if (!sec.classList.contains('hidden')) {
+            sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    // Si la URL pide abrir obligaciones, mantener visible
+    if (window.location.search.includes('seccion=obligaciones') || window.location.hash === '#seccion-obligaciones') {
+        const sec = document.getElementById('seccion-obligaciones');
+        if (sec) {
+            sec.classList.remove('hidden');
+            sec.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    function _obtenerCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+
+    // 1. Guardar una sola obligación sin recargar
+    async function guardarObligacionIndividual(obId) {
+        const btn = document.getElementById(`btn-save-ob-${obId}`);
+        const textarea = document.getElementById(`texto-ob-${obId}`);
+        if (!textarea) return;
+
+        const texto = textarea.value.trim();
+        if (btn) {
+            btn.textContent = 'Guardando...';
+            btn.disabled = true;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+            formData.append('accion', 'editar');
+            formData.append('obligacion_id', obId);
+            formData.append('descripcion_clausula', texto);
+
+            const res = await fetch("{% url 'generador:gestionar_obligaciones_contratista' %}", {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                if (btn) {
+                    btn.textContent = '✓ Guardado';
+                    btn.classList.add('text-emerald-400');
+                    setTimeout(() => {
+                        btn.textContent = '💾 Guardar';
+                        btn.classList.remove('text-emerald-400');
+                        btn.disabled = false;
+                    }, 2000);
+                }
+                mostrarToast(data.mensaje || 'Obligación guardada correctamente');
+            } else {
+                throw new Error(data.mensaje || 'Error al guardar');
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+            if (btn) {
+                btn.textContent = '💾 Guardar';
+                btn.disabled = false;
+            }
+        }
+    }
+
+    // 2. Guardar TODAS las obligaciones a la vez sin perder nada
+    async function guardarTodasObligaciones() {
+        const textareas = document.querySelectorAll('.input-ob-text');
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+        formData.append('accion', 'guardar_todas');
+
+        textareas.forEach(ta => {
+            formData.append(ta.name, ta.value.trim());
+        });
+
+        try {
+            const res = await fetch("{% url 'generador:gestionar_obligaciones_contratista' %}", {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                mostrarToast(data.mensaje || 'Todas las obligaciones guardadas');
+            }
+        } catch (err) {
+            alert('Error al guardar obligaciones: ' + err.message);
+        }
+    }
+
+    // 3. Agregar nueva obligación sin recargar pantalla
+    async function agregarObligacionAJAX(e) {
+        e.preventDefault();
+        const input = document.getElementById('input-nueva-obligacion');
+        const btn = document.getElementById('btn-submit-agregar');
+        const texto = input.value.trim();
+        if (!texto) return;
+
+        btn.disabled = true;
+        btn.textContent = '+ Agregando...';
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+            formData.append('accion', 'agregar');
+            formData.append('descripcion_clausula', texto);
+
+            const res = await fetch("{% url 'generador:gestionar_obligaciones_contratista' %}", {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+
+            if (data.ok && data.nueva_obligacion) {
+                const ob = data.nueva_obligacion;
+                const cont = document.getElementById('contenedor-lista-obligaciones');
+                const card = document.createElement('div');
+                card.id = `ob-card-${ob.id}`;
+                card.className = 'card-ob-item bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-emerald-400">Obligación <span class="ob-num">${ob.numero}</span></span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="guardarObligacionIndividual(${ob.id})"
+                                    id="btn-save-ob-${ob.id}"
+                                    class="text-[11px] bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2 py-0.5 rounded-lg transition">
+                                💾 Guardar
+                            </button>
+                            <button type="button" onclick="eliminarObligacionIndividual(${ob.id}, ${ob.numero})"
+                                    class="text-[11px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded-lg transition">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="texto-ob-${ob.id}" name="ob_${ob.id}" rows="2"
+                              class="input-ob-text w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none">${ob.texto}</textarea>
+                `;
+                cont.appendChild(card);
+                input.value = '';
+
+                // Actualizar contadores
+                const b1 = document.getElementById('total-ob-badge');
+                const b2 = document.getElementById('total-ob-badge-2');
+                if (b1) b1.textContent = data.total_obligaciones;
+                if (b2) b2.textContent = data.total_obligaciones;
+
+                mostrarToast(data.mensaje || 'Obligación agregada correctamente');
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else if (data.ok) {
+                mostrarToast(data.mensaje || 'Obligaciones procesadas');
+                input.value = '';
+            }
+        } catch (err) {
+            alert('Error al agregar obligación: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '+ Agregar';
+        }
+    }
+
+    // 4. Eliminar obligación sin recargar pantalla
+    async function eliminarObligacionIndividual(obId, num) {
+        if (!confirm(`¿Eliminar la Obligación N° ${num}?`)) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+            formData.append('accion', 'eliminar');
+            formData.append('obligacion_id', obId);
+
+            const res = await fetch("{% url 'generador:gestionar_obligaciones_contratista' %}", {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const card = document.getElementById(`ob-card-${obId}`);
+                if (card) card.remove();
+
+                // Reenumerar en pantalla
+                const nums = document.querySelectorAll('.ob-num');
+                nums.forEach((el, idx) => {
+                    el.textContent = idx + 1;
+                });
+
+                const b1 = document.getElementById('total-ob-badge');
+                const b2 = document.getElementById('total-ob-badge-2');
+                if (b1) b1.textContent = data.total_obligaciones;
+                if (b2) b2.textContent = data.total_obligaciones;
+
+                mostrarToast(data.mensaje || 'Obligación eliminada');
+            }
+        } catch (err) {
+            alert('Error al eliminar: ' + err.message);
+        }
+    }
+</script>
+{% endblock %}

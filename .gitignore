@@ -1,0 +1,43 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Django Database & Migrations cache
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3-shm
+db.sqlite3-wal
+
+# Secrets & Environment variables
+.env
+*.env
+!*.env.example
+
+# Media & Generated Files (User uploaded and output packages)
+media/
+!media/.gitkeep
+plantillas_dinamicas/
+!plantillas_dinamicas/.gitkeep
+
+# IDEs & System files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Temp files
+*.log
+*.tmp
+*.bak

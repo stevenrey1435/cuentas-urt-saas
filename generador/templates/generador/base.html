@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Cuentas al Día | Tu Cuenta de Cobro en 1 Clic{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif; }
+        .font-mono-subtle { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+        /* TEMA CLARO MINIMALISTA (Por defecto - blanco puro, limpio y directo) */
+        html.theme-light body { background-color: #f8fafc !important; color: #0f172a !important; }
+        html.theme-light header, html.theme-light footer { background-color: rgba(255, 255, 255, 0.95) !important; border-color: #e2e8f0 !important; }
+        html.theme-light .card-clean { background-color: #ffffff !important; border-color: #e2e8f0 !important; box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04) !important; }
+        html.theme-light .bg-slate-900 { background-color: #ffffff !important; border-color: #e2e8f0 !important; box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04) !important; }
+        html.theme-light .bg-slate-950, html.theme-light .bg-slate-950\/80, html.theme-light .bg-slate-950\/90, html.theme-light .bg-slate-950\/70, html.theme-light .bg-slate-950\/60 {
+            background-color: #f8fafc !important; border-color: #e2e8f0 !important; color: #0f172a !important;
+        }
+        html.theme-light .bg-slate-800, html.theme-light .bg-slate-800\/80, html.theme-light .bg-slate-800\/70 {
+            background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #1e293b !important;
+        }
+        html.theme-light .text-white, html.theme-light .text-slate-100, html.theme-light .text-slate-200 { color: #0f172a !important; }
+        html.theme-light .text-slate-300, html.theme-light .text-slate-400 { color: #475569 !important; }
+        html.theme-light .text-emerald-400, html.theme-light .text-emerald-300 { color: #059669 !important; }
+        html.theme-light .text-sky-400, html.theme-light .text-sky-300 { color: #0284c7 !important; }
+        html.theme-light .text-amber-300 { color: #d97706 !important; }
+        html.theme-light .border-slate-800, html.theme-light .border-slate-800\/80, html.theme-light .border-slate-700 { border-color: #e2e8f0 !important; }
+        html.theme-light input, html.theme-light textarea, html.theme-light select {
+            background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #0f172a !important;
+        }
+        html.theme-light input:focus, html.theme-light textarea:focus, html.theme-light select:focus {
+            border-color: #10b981 !important; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
+        }
+        html.theme-light .bg-emerald-600, html.theme-light .from-emerald-600 { color: #ffffff !important; }
+        html.theme-light .bg-emerald-600 span, html.theme-light .from-emerald-600 span { color: #ffffff !important; }
+    </style>
+    <script>
+        const temaGuardado = localStorage.getItem('app_theme');
+        if (temaGuardado !== 'dark') {
+            document.documentElement.classList.add('theme-light');
+        }
+        function alternarTemaVisual() {
+            const html = document.documentElement;
+            if (html.classList.contains('theme-light')) {
+                html.classList.remove('theme-light');
+                localStorage.setItem('app_theme', 'dark');
+            } else {
+                html.classList.add('theme-light');
+                localStorage.setItem('app_theme', 'light');
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Barra de Navegación Minimalista -->
+    <header class="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 transition-all">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+            
+            <!-- Logo Simple y Claro -->
+            <a href="{% url 'generador:dashboard' %}" class="flex items-center gap-2.5 group">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-emerald-900/20 group-hover:scale-105 transition">
+                    CD
+                </div>
+                <div>
+                    <span class="font-extrabold text-white text-base tracking-tight group-hover:text-emerald-400 transition">
+                        Cuentas al Día
+                    </span>
+                    <span class="hidden sm:inline text-xs text-slate-400 ml-1.5">• Gestión de Cuentas de Cobro</span>
+                </div>
+            </a>
+
+            <!-- Acciones de Usuario -->
+            {% if contratista %}
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Nombre y Contrato -->
+                <div class="hidden md:flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span class="font-semibold text-slate-200">{{ contratista.nombres_apellidos|truncatechars:22 }}</span>
+                    <span class="text-slate-400 text-[11px]">(N° {{ contratista.numero_contrato }})</span>
+                </div>
+
+                <!-- Pases Disponibles -->
+                <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1.5 text-xs">
+                    <span class="text-emerald-400 font-extrabold">{{ contratista.pases_disponibles }}</span>
+                    <span class="text-emerald-400/90 font-medium hidden sm:inline">{% if contratista.pases_disponibles == 1 %}pase{% else %}pases{% endif %}</span>
+                </div>
+
+                <!-- Botón Rápido de Recargar -->
+                <button type="button" onclick="abrirModalRecarga()"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
+                    <span>⚡ Recargar</span>
+                </button>
+
+                <!-- Botón Modo Claro / Oscuro -->
+                <button type="button" onclick="alternarTemaVisual()" title="Cambiar tema claro/oscuro"
+                        class="text-slate-400 hover:text-white p-1.5 rounded-xl text-xs hover:bg-slate-800 transition">
+                    ☀️/🌙
+                </button>
+
+                <!-- Salir -->
+                <form action="{% url 'generador:cambiar_contratista' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="salir">
+                    <button type="submit" title="Cerrar sesión"
+                            class="text-xs font-medium text-slate-400 hover:text-rose-400 px-2 py-1.5 rounded-xl transition">
+                        Salir
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="alternarTemaVisual()" title="Cambiar tema claro/oscuro"
+                        class="text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-slate-800 transition">
+                    ☀️ / 🌙
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Notificaciones del Sistema -->
+    {% if messages %}
+    <div class="max-w-5xl mx-auto w-full px-4 sm:px-6 mt-4 space-y-2">
+        {% for message in messages %}
+        <div class="px-4 py-2.5 rounded-2xl border text-xs sm:text-sm flex items-center justify-between shadow-sm transition
+            {% if message.tags == 'error' %}bg-rose-950/80 border-rose-500/40 text-rose-200
+            {% elif message.tags == 'warning' %}bg-amber-950/80 border-amber-500/40 text-amber-200
+            {% elif message.tags == 'success' %}bg-emerald-950/80 border-emerald-500/40 text-emerald-200
+            {% else %}bg-sky-950/80 border-sky-500/40 text-sky-200{% endif %}">
+            <span class="flex items-center gap-2">
+                {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% else %}ℹ{% endif %}
+                {{ message }}
+            </span>
+            <button onclick="this.parentElement.remove()" class="text-xs opacity-60 hover:opacity-100 ml-4">✕</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modal de Recarga Rápida (Enfocado en Conversión Inmediata) -->
+    <div id="modal-recargar-pases" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-md w-full space-y-5 animate-in fade-in">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-lg font-extrabold text-white">Recargar Pases de Cobro</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Tu cuenta lista en 1 clic. Paga por Nequi o Daviplata.</p>
+                </div>
+                <button type="button" onclick="cerrarModalRecarga()" class="text-slate-400 hover:text-white text-base p-1">✕</button>
+            </div>
+
+            <!-- Precios Transparentes y Directos -->
+            <div class="grid grid-cols-2 gap-2.5 text-center">
+                <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3 space-y-1">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">1 Mes (1 Pase)</span>
+                    <span class="text-lg font-extrabold text-white block">$15.000</span>
+                    <span class="text-[10px] text-slate-400">Para tu cuenta de este mes</span>
+                </div>
+                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 space-y-1 relative">
+                    <span class="absolute -top-2 right-2 bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">Mejor Opción</span>
+                    <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Trimestre (3 Pases)</span>
+                    <span class="text-lg font-extrabold text-emerald-400 block">$35.000</span>
+                    <span class="text-[10px] text-slate-400">Ahorras $10.000</span>
+                </div>
+            </div>
+
+            <!-- Botón Directo WhatsApp -->
+            <div class="space-y-2">
+                <a href="https://wa.me/573001234567?text=Hola,%20quiero%20recargar%20pases%20para%20mi%20cuenta%20de%20cobro%20con%20C%C3%A9dula%20{{ contratista.cedula|default:'' }}"
+                   target="_blank"
+                   class="w-full bg-[#25D366] hover:bg-[#20bd5a] text-slate-950 font-extrabold py-3 px-4 rounded-xl text-sm shadow-md flex items-center justify-center gap-2 transition">
+                    <span>💬 Pagar por WhatsApp (Nequi / Daviplata)</span>
+                </a>
+                <p class="text-[11px] text-center text-slate-400">
+                    Transfiere y recibe tu código de activación en segundos.
+                </p>
+            </div>
+
+            <!-- Canjear Código -->
+            <div class="pt-3 border-t border-slate-800">
+                <span class="text-xs font-bold text-slate-300 block mb-2">¿Ya tienes un código de activación?</span>
+                <form action="{% url 'generador:canjear_codigo_recarga' %}" method="post" class="flex gap-2">
+                    {% csrf_token %}
+                    <input type="text" name="codigo" required placeholder="Ej: MES-1"
+                           class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white uppercase font-mono-subtle focus:border-emerald-500 focus:outline-none">
+                    <button type="submit"
+                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
+                        Activar
+                    </button>
+                </form>
+            </div>
+
+            <div class="text-center pt-1">
+                <button type="button" onclick="cerrarModalRecarga()" class="text-xs text-slate-400 hover:text-slate-200">
+                    Cerrar ventana
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Progreso Calmo y Transparente -->
+    <div id="modal-progreso-proceso" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-md w-full text-center space-y-5">
+            <div class="relative w-14 h-14 mx-auto flex items-center justify-center">
+                <div class="absolute inset-0 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin"></div>
+                <div class="text-emerald-400 font-extrabold text-xs">CD</div>
+            </div>
+
+            <div class="space-y-1">
+                <h3 id="modal-progreso-titulo" class="text-base font-extrabold text-white">
+                    Preparando tu cuenta de cobro...
+                </h3>
+                <p id="modal-progreso-subtitulo" class="text-xs text-slate-400">
+                    Organizando soportes y redactando tus actividades oficiales.
+                </p>
+            </div>
+
+            <div class="space-y-1 text-left">
+                <div class="flex items-center justify-between text-xs">
+                    <span id="modal-progreso-fase-texto" class="font-semibold text-emerald-400">Paso 1: Leyendo tus soportes...</span>
+                    <span id="modal-progreso-porcentaje" class="text-slate-400 font-bold">25%</span>
+                </div>
+                <div class="w-full bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden">
+                    <div id="modal-progreso-barra" class="bg-emerald-500 h-full rounded-full transition-all duration-500 ease-out" style="width: 25%;"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-800">
+                <span id="modal-progreso-timer" class="font-bold text-white">00:00s</span>
+                <span>Mantén esta ventana abierta</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast de Notificación Flotante -->
+    <div id="toast-copiado" class="fixed bottom-6 right-6 z-50 hidden bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2">
+        <span>✓</span>
+        <span id="toast-copiado-texto">Texto copiado</span>
+    </div>
+
+    <!-- Pie de Página Minimalista e Independiente -->
+    <footer class="border-t border-slate-900 bg-slate-950 py-4 text-center text-[11px] text-slate-500">
+        Cuentas al Día — Asistente Independiente de Cuentas de Cobro para Contratistas
+    </footer>
+
+    <!-- Scripts Utilitarios -->
+    <script>
+        function abrirModalRecarga() {
+            document.getElementById('modal-recargar-pases')?.classList.remove('hidden');
+        }
+
+        function cerrarModalRecarga() {
+            document.getElementById('modal-recargar-pases')?.classList.add('hidden');
+        }
+
+        function mostrarToast(mensaje) {
+            const toast = document.getElementById('toast-copiado');
+            const texto = document.getElementById('toast-copiado-texto');
+            if (!toast || !texto) return;
+            texto.textContent = mensaje;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2400);
+        }
+
+        function copiarTextoAlPortapapeles(elementId, etiqueta) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const val = el.value !== undefined ? el.value : el.innerText;
+            navigator.clipboard.writeText(val).then(() => {
+                mostrarToast(etiqueta + " copiado");
+            });
+        }
+
+        let _timerProgreso = null;
+        let _segundosProgreso = 0;
+
+        function activarModalProgreso(titulo) {
+            const modal = document.getElementById('modal-progreso-proceso');
+            if (!modal) return;
+            if (titulo) {
+                const elTit = document.getElementById('modal-progreso-titulo');
+                if (elTit) elTit.textContent = titulo;
+            }
+            modal.classList.remove('hidden');
+
+            const barra = document.getElementById('modal-progreso-barra');
+            const porcentaje = document.getElementById('modal-progreso-porcentaje');
+            const fase = document.getElementById('modal-progreso-fase-texto');
+            const timerEl = document.getElementById('modal-progreso-timer');
+
+            _segundosProgreso = 0;
+            if (_timerProgreso) clearInterval(_timerProgreso);
+            _timerProgreso = setInterval(() => {
+                _segundosProgreso++;
+                const min = String(Math.floor(_segundosProgreso / 60)).padStart(2, '0');
+                const seg = String(_segundosProgreso % 60).padStart(2, '0');
+                if (timerEl) timerEl.textContent = `${min}:${seg}s`;
+
+                if (_segundosProgreso === 3) {
+                    if (barra) barra.style.width = '50%';
+                    if (porcentaje) porcentaje.textContent = '50%';
+                    if (fase) fase.textContent = 'Paso 2: Asignando archivos a tus obligaciones...';
+                } else if (_segundosProgreso === 8) {
+                    if (barra) barra.style.width = '75%';
+                    if (porcentaje) porcentaje.textContent = '75%';
+                    if (fase) fase.textContent = 'Paso 3: Redactando actividades formales...';
+                } else if (_segundosProgreso === 14) {
+                    if (barra) barra.style.width = '95%';
+                    if (porcentaje) porcentaje.textContent = '95%';
+                    if (fase) fase.textContent = 'Paso 4: Empaquetando archivo .ZIP...';
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

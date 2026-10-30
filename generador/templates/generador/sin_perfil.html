@@ -1,0 +1,214 @@
+{% extends "generador/base.html" %}
+
+{% block title %}Ingreso de Contratista | Cuentas al Día{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-6 pt-4">
+
+    <!-- Encabezado Minimalista y Neutral -->
+    <div class="text-center space-y-2">
+        <span class="inline-block text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 rounded-full">
+            Gestión y Supervisión Contractual
+        </span>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">
+            Radica tu Cuenta de Cobro en 1 Minuto
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+            Sube tus fotos o archivos del mes y descarga tu paquete completo (.ZIP y Word) listo para supervisión.
+        </p>
+    </div>
+
+    <!-- Contenedor Principal de Pestañas -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">
+        
+        <!-- Selector de Pestañas Limpio -->
+        <div class="flex items-center justify-center p-1 bg-slate-950 border border-slate-800 rounded-2xl">
+            <button type="button" id="tab-btn-login" onclick="cambiarPestana('login')"
+                    class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-sm">
+                <span>🔐 Ingresar</span>
+            </button>
+            <button type="button" id="tab-btn-registro" onclick="cambiarPestana('registro')"
+                    class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5">
+                <span>✨ Crear Cuenta</span>
+            </button>
+        </div>
+
+        <!-- Pestaña 1: Ingreso Rápido -->
+        <div id="panel-login" class="space-y-4 pt-1">
+            <form action="{% url 'generador:cambiar_contratista' %}" method="post" class="space-y-3.5">
+                {% csrf_token %}
+                <!-- Campo Honeypot Invisible Anti-Bots -->
+                <input type="text" name="website_url_hp" value="" class="hidden" tabindex="-1" autocomplete="off">
+                <div class="space-y-1">
+                    <label class="block text-xs font-bold text-slate-300">Número de Cédula</label>
+                    <input type="text" name="cedula" required placeholder="Ingresa tu cédula sin puntos"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none transition">
+                </div>
+
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-300">PIN o Clave</label>
+                        <span class="text-[10px] text-slate-400">¿Primera vez? Usa los últimos 4 dígitos de tu cédula</span>
+                    </div>
+                    <input type="password" name="pin_acceso" required placeholder="Clave de 4 dígitos"
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none transition">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3 px-4 rounded-xl text-sm shadow-md transition flex items-center justify-center gap-2">
+                    <span>Entrar a Mis Cuentas de Cobro →</span>
+                </button>
+            </form>
+
+            <div class="text-center pt-2">
+                <button type="button" onclick="cambiarPestana('registro')" class="text-xs text-slate-400 hover:text-emerald-400 transition">
+                    ¿Es tu primer contrato? <strong class="text-emerald-400 underline">Crea tu cuenta aquí</strong>
+                </button>
+            </div>
+        </div>
+
+        <!-- Pestaña 2: Registro Inicial -->
+        <div id="panel-registro" class="hidden space-y-4 pt-1">
+            <p class="text-xs text-slate-400 text-center">
+                Ingresa tus datos una sola vez. Se usarán para todas tus cuentas del año.
+            </p>
+
+            <form action="{% url 'generador:crear_contratista' %}" method="post" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                <!-- Campo Honeypot Invisible Anti-Bots -->
+                <input type="text" name="website_url_hp" value="" class="hidden" tabindex="-1" autocomplete="off">
+
+                <!-- Datos Personales -->
+                <div class="space-y-2">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">1. Datos Personales</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div class="sm:col-span-2 space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Nombres y Apellidos Completos *</label>
+                            <input type="text" name="nombres_apellidos" required placeholder="Ej: María Camila González"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Número de Cédula *</label>
+                            <input type="text" name="cedula" required placeholder="Sin puntos"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Crea un PIN (4 dígitos) *</label>
+                            <input type="password" name="pin_acceso" required minlength="4" placeholder="Mínimo 4 dígitos"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Datos del Contrato -->
+                <div class="space-y-2 pt-1 border-t border-slate-800">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">2. Datos de tu Contrato</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Número de Contrato *</label>
+                            <input type="text" name="numero_contrato" required placeholder="Ej: 1120"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                            <input type="hidden" name="anio_contrato" value="{{ anio_actual|default:2026 }}">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Nombre de tu Supervisor(a) *</label>
+                            <input type="text" name="nombre_supervisor" required placeholder="Nombre de quien supervisa"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Cargo del Supervisor(a)</label>
+                            <input type="text" name="cargo_supervisor" value="Profesional Especializado" placeholder="Ej: Profesional Especializado / Coordinador"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Dirección, Oficina o Grupo</label>
+                            <input type="text" name="direccion_oficina" value="Oficina de Gestión Contractual" placeholder="Ej: Subdirección Jurídica / Sistemas / Social"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Sede o Territorial</label>
+                            <input type="text" name="direccion_territorial" value="Nivel Central" placeholder="Ej: Nivel Central / Bogotá / Territorial"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-xs font-semibold text-slate-300">Fecha Inicio</label>
+                            <input type="date" name="fecha_inicio" value="2026-01-19"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        <div class="space-y-1 sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-300">Fecha Terminación</label>
+                            <input type="date" name="fecha_terminacion_actual" value="2026-12-31"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-xs font-semibold text-slate-300">Objeto del Contrato *</label>
+                        <textarea name="objeto_contrato" rows="2" required placeholder="Pega el objeto estipulado en tu contrato..."
+                                  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Obligaciones Específicas -->
+                <div class="space-y-2 pt-1 border-t border-slate-800">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">3. Tus Obligaciones Contractuales</span>
+                        <span class="text-[10px] text-slate-400">Una por línea</span>
+                    </div>
+                    <textarea name="obligaciones_texto" rows="5" required
+                              placeholder="1. Desarrollar las actividades técnicas y operativas asignadas por la supervisión...&#10;2. Elaborar los informes periódicos y compilar los soportes documentales...&#10;3. Participar en las reuniones de seguimiento y mesas de trabajo..."
+                              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono-subtle focus:border-emerald-500 focus:outline-none"></textarea>
+                </div>
+
+                <!-- Firma Digitalizada Opcional -->
+                <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <div>
+                        <span class="text-xs font-bold text-slate-200 block">Firma en imagen (Opcional)</span>
+                        <p class="text-[10px] text-slate-400">Para que tus documentos salgan firmados.</p>
+                    </div>
+                    <input type="file" name="firma_imagen" accept="image/*"
+                           class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200">
+                </div>
+
+                <!-- Botón de Envío -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                    <button type="button" onclick="cambiarPestana('login')" class="text-xs text-slate-400 hover:text-white">
+                        ← Ya tengo cuenta
+                    </button>
+                    <button type="submit"
+                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition">
+                        ✓ Guardar y Comenzar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    function cambiarPestana(tipo) {
+        const pLogin = document.getElementById('panel-login');
+        const pReg = document.getElementById('panel-registro');
+        const bLogin = document.getElementById('tab-btn-login');
+        const bReg = document.getElementById('tab-btn-registro');
+
+        if (tipo === 'registro') {
+            pLogin.classList.add('hidden');
+            pReg.classList.remove('hidden');
+
+            bReg.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            bReg.classList.remove('text-slate-400');
+            bLogin.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+            bLogin.classList.add('text-slate-400');
+        } else {
+            pReg.classList.add('hidden');
+            pLogin.classList.remove('hidden');
+
+            bLogin.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            bLogin.classList.remove('text-slate-400');
+            bReg.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+            bReg.classList.add('text-slate-400');
+        }
+    }
+</script>
+{% endblock %}
