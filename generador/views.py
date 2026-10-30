@@ -254,9 +254,8 @@ def detalle_informe(request, informe_id: int):
     if informe.contratista.pases_disponibles <= 0 and informe.estado == "BORRADOR":
         messages.warning(
             request,
-            "⚡ Para descargar tus documentos y paquete .ZIP, primero activa un Pase de Cobro en '⚡ Recargar Pases'.",
+            "⚡ Este informe está listo para editar. Para generar tus documentos y paquete .ZIP, primero activa un Pase de Cobro en '⚡ Recargar Pases'.",
         )
-        return redirect("generador:detalle_informe", informe_id=informe.id)
     contratista = informe.contratista
 
     # Asegurar que todas las obligaciones del contratista tengan su registro en este informe
