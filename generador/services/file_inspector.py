@@ -314,7 +314,12 @@ def extraer_metadatos_ligeros_archivo(ruta_o_fileobj, nombre_archivo: str, ruta_
                 doc_ins = Document(io.BytesIO(raw_bytes))
             else:
                 doc_ins = Document(ruta_o_fileobj)
-            primeros_parrafos = [p.text.strip()[:140] for p in doc_ins.paragraphs if p.text.strip()][:8]
+            primeros_parrafos = [p.text.strip()[:180] for p in doc_ins.paragraphs if p.text.strip()][:16]
+            for tabla in doc_ins.tables[:4]:
+                for fila in tabla.rows[:4]:
+                    texto_fila = " | ".join(celda.text.strip() for celda in fila.cells if celda.text.strip())
+                    if texto_fila:
+                        primeros_parrafos.append(texto_fila[:180])
             metadatos["resumen_lineas"] = primeros_parrafos
             txt_docx = " ".join(primeros_parrafos).lower()
             nom_docx_low = nombre_archivo.lower()
@@ -338,12 +343,12 @@ def extraer_metadatos_ligeros_archivo(ruta_o_fileobj, nombre_archivo: str, ruta_
                     reader = pypdf.PdfReader(ruta_o_fileobj)
 
                 texto_pdf = []
-                for page in reader.pages[:3]:
+                for page in reader.pages[:8]:
                     txt_p = page.extract_text() or ""
                     if txt_p.strip():
                         texto_pdf.extend([ln.strip()[:140] for ln in txt_p.splitlines() if ln.strip()])
 
-                metadatos["resumen_lineas"] = texto_pdf[:15]
+                metadatos["resumen_lineas"] = texto_pdf[:30]
                 txt_pdf_low = " ".join(texto_pdf).lower()
                 metadatos["texto_pdf"] = txt_pdf_low[:2000]
 

@@ -606,6 +606,37 @@ def _contraer_al(texto: str) -> str:
     return re.sub(r"\ba el\b", "al", texto, flags=re.IGNORECASE)
 
 
+def _pulir_redaccion_local(texto: str) -> str:
+    """Aplica correcciones conservadoras sin cambiar hechos ni alcance contractual."""
+    if not texto:
+        return ""
+    texto = _contraer_al(texto)
+    texto = re.sub(r"\bde el\b", "del", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"[ \t]{2,}", " ", texto)
+    texto = re.sub(r"\s+([,.;:])", r"\1", texto)
+    return texto.strip()
+
+
+def _hechos_evidencia(meta: dict, nombre_archivo: str) -> str:
+    """Construye un extracto corto con contenido observado, no una interpretación inventada."""
+    lineas = list(meta.get("resumen_lineas") or [])
+    for clave in ("texto_pdf", "texto_ocr"):
+        valor = (meta.get(clave) or "").strip()
+        if valor:
+            lineas.append(valor)
+    hechos = []
+    vistos = set()
+    for linea in lineas:
+        limpio = re.sub(r"\s+", " ", str(linea)).strip()
+        clave = limpio.lower()
+        if len(limpio) >= 8 and clave not in vistos:
+            vistos.add(clave)
+            hechos.append(limpio[:180])
+        if len(" ".join(hechos)) >= 520:
+            break
+    return " ".join(hechos)[:520] or f"Archivo soporte: {nombre_archivo}"
+
+
 def _inferir_contexto_clausula(
     clausula: str,
     num_ob: int,
@@ -831,8 +862,11 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
             cols_ev = meta_ev.get("encabezados_fila_1") or {}
 
             extracto_limpio = _limpiar_fragmento_significativo(lineas_ev, ev.nombre_original, nombre_contratista=nom_contratista)
+            hechos_ev = _hechos_evidencia(meta_ev, ev.nombre_original)
             sub_ref = f" — {extracto_limpio}" if extracto_limpio else ""
-            ctx_extra = f" (conforme a la evidencia '{extracto_limpio}' registrada en {ev.nombre_original})" if extracto_limpio else f" (soportado en el registro '{ev.nombre_original}')"
+            ctx_extra = (
+                f" (evidencia '{ev.nombre_original}'; contenido observado: {hechos_ev})"
+            )
 
             if tag_ev == "SOFTWARE_GIT" or ev.tipo_archivo == "CODIGO":
                 titulo_pto = f"Desarrollo de Software, Versionamiento y Control de Cambios{sub_ref}"
@@ -911,7 +945,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                     contexto_extra=ctx_extra,
                 )
 
-            desc_pto = _contraer_al(desc_pto)
+            desc_pto = _pulir_redaccion_local(desc_pto)
             items_numerados.append(f"{idx_ev}. {titulo_pto}: {desc_pto}")
             vinetas_desarrollo.append({
                 "titulo": titulo_pto,
@@ -935,7 +969,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                 titulo_pto = f"Gestión y Desarrollo — {ctx_clausula['tema_corto']}"
                 desc_pto = punto
 
-            desc_limpia = sanitizar_texto_para_reporte(_contraer_al(desc_pto))
+            desc_limpia = sanitizar_texto_para_reporte(_pulir_redaccion_local(desc_pto))
             titulo_limpio = sanitizar_texto_para_reporte(titulo_pto)
 
             # Si el apunte era corto, expandirlo con redacción formal
@@ -994,7 +1028,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
             f"de soportes y productos establecidos en los lineamientos de supervisión y gestión documental."
         )
         texto_tabla = sanitizar_texto_para_reporte(
-            _contraer_al(encabezado_tabla + "\n".join(items_numerados) + cierre_tabla)
+            _pulir_redaccion_local(encabezado_tabla + "\n".join(items_numerados) + cierre_tabla)
         )
 
         # 4. Construir bloques_evidencias para `Obligacion K.docx` y subitems para `REPORTE OTI.docx`
@@ -1013,7 +1047,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                 bloques_evidencias.append({
                     "numero": ev_idx,
                     "titulo": sanitizar_texto_para_reporte(titulo_ev_limpio),
-                    "descripcion": sanitizar_texto_para_reporte(desc_ev_limpia),
+                    "descripcion": sanitizar_texto_para_reporte(_pulir_redaccion_local(desc_ev_limpia)),
                     "archivo_asociado": ev.nombre_original,
                 })
                 subitems_anexos.append({
