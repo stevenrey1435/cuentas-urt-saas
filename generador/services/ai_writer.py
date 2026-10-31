@@ -538,53 +538,236 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
     return resultado
 
 
-def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_generales_mes: str = "") -> str:
-    c = informe.contratista
-    items_payload = []
-    bolsa_global_archivos = []
+def _distribuir_evidencias_balanceadas(informe, detalles_lista: List[Any]) -> Dict[int, List[Any]]:
+    """
+    Algoritmo de balanceo y pre-agrupación determinista de evidencias por obligación.
+    Asegura cumplimiento estricto de auditoría para contratación pública:
+    - Obligación 1: Arquitectura (DAS_HLD, DAS, arquitectura, diseño alto nivel).
+    - Obligación 3: Seguridad, inmutabilidad, SHA-256, IT-SIGAF, parametrización.
+    - Obligación 6: Cronograma, planeación, Gantt, PlanT120, alcance.
+    - Obligación 7: Código fuente, repositorio Git, ramas, commits, merge request, gitlab.
+    - Obligación 8: Tableros ágiles, seguimiento, Kanban, sprint, Jira, Azure boards, planner.
+    - Obligación 9: Permisos, solicitudes, CooperApp, mesa de servicios, correo electrónico.
+    - Obligación 5 o 10: Asistencia a reuniones, socialización, comités, mesas técnicas, Teams.
+    - Mención explícita ('obK', 'actividad K'): Obligación K.
+    - CAP MÁXIMO: Ninguna obligación puede tener más de 2 o 3 evidencias mientras existan obligaciones vacías.
+    - Reparto equitativo de capturas genéricas en obligaciones 2, 4, 5, 10, 11 para que CERO queden vacías.
+    """
+    if not detalles_lista:
+        return {}
 
+    from generador.models import ArchivoEvidencia
+
+    evidencias_informe = list(
+        ArchivoEvidencia.objects.filter(detalle_obligacion__informe=informe).order_by("id")
+    )
+    obs_dict = {det.obligacion.numero_obligacion: det for det in detalles_lista}
+    obs_nums = sorted(obs_dict.keys())
+
+    if not evidencias_informe:
+        return {num: [] for num in obs_nums}
+
+    asignacion: Dict[int, List[Any]] = {num: [] for num in obs_nums}
+    no_asignadas = []
+
+    # 1. Mención explícita en el nombre del archivo
+    for ev in evidencias_informe:
+        nom_low = _normalizar_espacios(ev.nombre_original).lower()
+        m_exp = re.search(r"(?:obligaci[oó]n|ob|actividad|act)[\s_\-]*(\d{1,2})", nom_low)
+        if m_exp:
+            n = int(m_exp.group(1))
+            if n in asignacion and len(asignacion[n]) < 2:
+                asignacion[n].append(ev)
+                continue
+        no_asignadas.append(ev)
+
+    # 2. Reglas temáticas institucionales (con cap estricto de 2 archivos por obligación)
+    pendientes_tematica = []
+    for ev in no_asignadas:
+        txt = f"{ev.nombre_original} {ev.titulo_evidencia or ''} {ev.metadatos_ligeros or ''}".lower()
+        target = None
+
+        if any(k in txt for k in ("das_hld", "das/", "hld", "diseño de software", "diseno de software", "entrega documento de diseño", "arquitectura")):
+            target = 1
+        elif any(k in txt for k in ("seguridad", "sha-256", "inmutabilidad", "it-sigaf", "control de evidencias", "parametrización")):
+            target = 3
+        elif any(k in txt for k in ("cronograma", "plant120", "plan_trabajo", "gantt", "alcance")):
+            target = 6
+        elif any(k in txt for k in ("gitlab", "merge request", "hotfix", "commit", "branch", "repositorio git", "código fuente", "codigo fuente")):
+            target = 7
+        elif any(k in txt for k in ("tablero_agil", "kanban", "sprint", "jira", "azure boards", "planner", "seguimiento")):
+            target = 8
+        elif any(k in txt for k in ("permisos", "cooperapp", "mesa de servicios", "correo electrónico", "solicitud", "asignación de permisos")):
+            target = 9
+        elif any(k in txt for k in ("reunion", "asistencia", "acta", "teams", "mesa técnica", "socialización", "transferencia")):
+            # Asignar a 5 (Socialización) o 10 (Reuniones) según disponibilidad
+            target = 5 if len(asignacion.get(5, [])) <= len(asignacion.get(10, [])) else 10
+
+        if target and target in asignacion and len(asignacion[target]) < 2:
+            asignacion[target].append(ev)
+        else:
+            pendientes_tematica.append(ev)
+
+    # 3. Distribución en obligaciones VACÍAS (0 evidencias)
+    # Prioridad: obligaciones de soporte técnico y mantenimiento (7, 8, 5, 2, 4, 10, 11)
+    orden_preferente = [7, 8, 5, 2, 4, 10, 11] + [n for n in obs_nums if n not in (7, 8, 5, 2, 4, 10, 11)]
+
+    sobrantes = []
+    for ev in pendientes_tematica:
+        vacias = [n for n in obs_nums if len(asignacion[n]) == 0]
+        if vacias:
+            candidata = next((n for n in orden_preferente if n in vacias), vacias[0])
+            asignacion[candidata].append(ev)
+        else:
+            sobrantes.append(ev)
+
+    # 4. Archivos sobrantes: Repartir equitativamente en obligaciones que solo tienen 1 evidencia
+    for ev in sobrantes:
+        con_uno = [n for n in orden_preferente if len(asignacion[n]) == 1]
+        if not con_uno:
+            con_uno = [n for n in obs_nums if len(asignacion[n]) == 1]
+        if con_uno:
+            asignacion[con_uno[0]].append(ev)
+        else:
+            # Máximo 3 si el total de archivos excede 2N
+            con_dos = [n for n in obs_nums if len(asignacion[n]) < 3]
+            if con_dos:
+                asignacion[con_dos[0]].append(ev)
+
+    # 5. Sincronizar asignación en la base de datos de manera definitiva
+    for num_ob, evs_ob in asignacion.items():
+        det_db = obs_dict.get(num_ob)
+        if not det_db:
+            continue
+        for orden_idx, ev_obj in enumerate(evs_ob, start=1):
+            cambios = []
+            if ev_obj.detalle_obligacion_id != det_db.id:
+                ev_obj.detalle_obligacion = det_db
+                cambios.append("detalle_obligacion")
+            if ev_obj.orden != orden_idx:
+                ev_obj.orden = orden_idx
+                cambios.append("orden")
+            if cambios:
+                ev_obj.save(update_fields=cambios)
+
+    return asignacion
+
+
+def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_generales_mes: str = "") -> str:
+    """
+    Construye el prompt de alta precisión técnica para Qwen 2.5 / Llama 3 con:
+    - Pre-asignación balanceada de evidencias por obligación en Python (Cero sobrecarga de clustering para el LLM).
+    - Few-Shot In-Context Learning oficial GC-FO-15.
+    - Negative Constraints estrictas contra el bug de eco (prohibido copiar cláusulas o usar infinitivos).
+    - Mínimo 2 numerales técnicos exhaustivos (250-350 palabras por obligación).
+    """
+    c = informe.contratista
+
+    # 1. Pre-agrupación balanceada en Python (resuelve desbalance y acaparamiento)
+    asignacion_balanceada = _distribuir_evidencias_balanceadas(informe, detalles_lista)
+
+    items_payload = []
     for det in detalles_lista:
-        ob = det.obligacion
-        evs_det = list(det.archivos_evidencia.all())
-        for ev in evs_det:
-            bolsa_global_archivos.append({
-                "archivo": ev.nombre_original,
-                "ob_sugerida": ob.numero_obligacion,
-                "info": ev.resumen_para_prompt_ia(),
-            })
+        num_ob = det.obligacion.numero_obligacion
+        archivos_ob = asignacion_balanceada.get(num_ob, [])
         items_payload.append({
-            "ob": ob.numero_obligacion,
-            "clausula": _normalizar_espacios(ob.descripcion_clausula),
-            "apuntes": (det.apuntes_contratista or "")[: c.max_caracteres_apuntes],
+            "ob": num_ob,
+            "clausula_contractual": _normalizar_espacios(det.obligacion.descripcion_clausula),
+            "apuntes_contratista": (det.apuntes_contratista or "").strip()[: c.max_caracteres_apuntes],
+            "archivos_asignados": [
+                {
+                    "archivo": ev.nombre_original,
+                    "tipo": ev.tipo_archivo,
+                    "resumen_tecnico": ev.resumen_para_prompt_ia(),
+                }
+                for ev in archivos_ob
+            ],
         })
 
-    prompt = f"""Eres el redactor técnico experto en contratación pública y supervisión contractual.
-Redacta la documentación del Pago {informe.numero_pago:02d} ({informe.nombre_mes} {informe.anio}) para el contratista {c.nombres_apellidos}.
+    bloque_apuntes_globales = ""
+    if apuntes_generales_mes and apuntes_generales_mes.strip():
+        bloque_apuntes_globales = f"\nAPUNTES Y NOTAS DEL MES:\n{apuntes_generales_mes.strip()[:2500]}\n"
 
-CONTRATO: {c.numero_contrato}-{c.anio_contrato} | PROYECTO: {c.proyecto_area}
-OBJETO: {_normalizar_espacios(c.objeto_contrato)}
+    few_shot_ejemplo = """EJEMPLO DE REFERENCIA OBLIGATORIO (ESTÁNDAR DE SUPERVISIÓN GC-FO-15):
+ENTRADA DE EJEMPLO:
+{
+  "ob": 1,
+  "clausula_contractual": "Desarrollar e integrar componentes de software utilizando tecnologías vigentes y buenas prácticas que se encuentren alineadas con la arquitectura institucional.",
+  "apuntes_contratista": "Se culminó el diseño de arquitectura DAS HLD para CooperApp y se documentaron diagramas de secuencia.",
+  "archivos_asignados": [
+    {"archivo": "DAS_HLD_CooperApp.pdf", "tipo": "PDF", "resumen_tecnico": "Documento de Arquitectura de Software y Diseño de Alto Nivel v1.2"}
+  ]
+}
+SALIDA DE EJEMPLO ESPERADA (NOTA: Observa cómo NUNCA se copia la cláusula y se usa pretérito impersonal):
+{
+  "texto_tabla_principal": "1. Estructuración y Definición del Diseño de Arquitectura de Alto Nivel (DAS/HLD): Se procedió con la elaboración integral del Documento de Arquitectura de Software (DAS) y diseño de alto nivel para el componente CooperApp, estructurando los patrones arquitectónicos en capas, definiendo los modelos de integración mediante servicios REST y garantizando la compatibilidad con el ecosistema tecnológico institucional. 2. Modelado de Secuencia y Validación de Especificaciones Técnicas: Se desarrollaron los diagramas de secuencia y flujos transaccionales para los endpoints de intercambio de datos, asegurando la consistencia metodológica con las directrices de la entidad y verificando el cumplimiento de los estándares de mantenibilidad y escalabilidad del sistema.",
+  "desarrollo_detallado_oti": {
+    "parrafos_introductorios": [
+      "Durante el periodo mensual reportado, las actividades ejecutadas se orientaron a la estructuración de la arquitectura de software y definición de especificaciones técnicas para los componentes del sistema, garantizando la articulación con los lineamientos tecnológicos institucionales.",
+      "En cumplimiento de los estándares de interoperabilidad y calidad técnica de la entidad, se consolidaron los diagramas y especificaciones de diseño requeridos para la fase de construcción e integración continua."
+    ],
+    "vinetas_desarrollo": [
+      {"titulo": "Elaboración del Documento de Arquitectura de Software (DAS/HLD)", "descripcion": "Se estructuró la especificación de alto nivel contemplando los diagramas de componentes, flujos de integración y patrones de persistencia para el sistema CooperApp."},
+      {"titulo": "Definición y Validación de Diagramas de Secuencia e Interfaz", "descripcion": "Se modelaron las interacciones entre capas de servicio y controladores, asegurando la trazabilidad de peticiones y la validación de excepciones."}
+    ],
+    "resultados_entregables": [
+      {"titulo": "Documento de Arquitectura DAS/HLD Consolidado", "descripcion": "Especificación arquitectónica final aprobada para el ciclo de desarrollo de software."}
+    ]
+  },
+  "bloques_evidencias": [
+    {
+      "numero": 1,
+      "titulo": "Documento de Arquitectura de Software y Diseño de Alto Nivel DAS HLD",
+      "descripcion": "Soporte documental que contiene el modelado arquitectónico, diagramas de componentes y flujos técnicos del sistema.",
+      "archivo_asociado": "DAS_HLD_CooperApp.pdf"
+    }
+  ]
+}"""
 
-ARCHIVOS SOPORTE ASOCIADOS:
-{json.dumps(bolsa_global_archivos, ensure_ascii=False, separators=(",", ":"))}
+    prompt = f"""Actúa como un Arquitecto de Software y Redactor Técnico Senior experto en contratación pública en Colombia y en el formato oficial de supervisión contractual GC-FO-15.
+Tu objetivo es redactar la documentación técnica del Pago {informe.numero_pago:02d} ({informe.nombre_mes} {informe.anio}) para el contratista {c.nombres_apellidos}.
 
-OBLIGACIONES A REDACTAR:
-{json.dumps(items_payload, ensure_ascii=False, separators=(",", ":"))}
+DATOS CONTRACTUALES:
+Contratista: {c.nombres_apellidos} | C.C. {c.cedula_formateada} | Contrato: {c.numero_contrato}-{c.anio_contrato}
+Proyecto/Área: {c.proyecto_area} | Objeto: {_normalizar_espacios(c.objeto_contrato)}
+{bloque_apuntes_globales}
+OBLIGACIONES Y ARCHIVOS PRE-ASIGNADOS:
+{json.dumps(items_payload, ensure_ascii=False, indent=2)}
 
-INSTRUCCIONES DE CALIDAD OBLIGATORIAS:
-1. En `texto_tabla_principal`: Genera una redacción formal numerada (1. Título técnico: descripción de 4 a 6 líneas con impacto operativo) que alcance 250 a 350 palabras por obligación. NO uses corchetes angulares ni etiquetas HTML.
-2. En `desarrollo_detallado_oti`: Incluye 2 párrafos introductorios y viñetas técnicas sustanciosas.
-3. Responde EXCLUSIVAMENTE con un JSON válido con esta estructura:
+{few_shot_ejemplo}
+
+REGLAS DE ORO Y NEGATIVE CONSTRAINTS ESTRICTAS (CALIDAD DE AUDITORÍA 5.0/5.0):
+1. PROHIBIDO EL BUG DE ECO: Queda TERMINANTEMENTE PROHIBIDO copiar, repetir o parafrasear literalmente el texto de la cláusula como título o texto de las actividades (ejemplo PROHIBIDO: NO escribas "1. Desarrollar e integrar componentes..."). Debes titular con conceptos técnicos originales y específicos del soporte.
+2. TIEMPO VERBAL OBLIGATORIO: Redacta SIEMPRE en pretérito formal impersonal ("Se realizó...", "Se estructuró...", "Se validó...", "Se implementó...", "Se consolidó..."). PROHIBIDO usar verbos en infinitivo como encabezado.
+3. EXTENSIÓN Y DENSIDAD: Para cada obligación, `texto_tabla_principal` DEBE contener mínimo 2 numerales técnicos exhaustivos ('1. Título Técnico: ... 2. Título Técnico: ...') con un total de 250 a 350 palabras por obligación, detallando componentes, patrones, metodologías y aseguramiento de calidad.
+4. INTEGRIDAD DE EVIDENCIAS: Debes generar exactamente un bloque en `bloques_evidencias` por cada archivo presente en `archivos_asignados` de cada obligación. PROHIBIDO mover archivos entre obligaciones o inventar nombres de archivo. Si una obligación no tiene archivos asignados, genera un `bloques_evidencias` con el soporte documental de gestión.
+5. SIN HTML: PROHIBIDO incluir etiquetas HTML/XML (<para>, </para>, <br>).
+
+RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 {{
   "obligaciones": {{
     "<numero_obligacion>": {{
-      "texto_tabla_principal": "Texto extenso numerado libre de etiquetas HTML...",
+      "texto_tabla_principal": "1. Título Técnico Formal: Se procedió con... (párrafo denso de 4-6 líneas). 2. Título Técnico Formal: Se estructuró y verificó... (párrafo denso de 4-6 líneas).",
       "desarrollo_detallado_oti": {{
-        "parrafos_introductorios": ["Párrafo formal 1...", "Párrafo técnico 2..."],
-        "vinetas_desarrollo": [{{"titulo": "Título técnico", "descripcion": "Explicación exhaustiva..."}}],
-        "resultados_entregables": [{{"titulo": "Entregable verificable", "descripcion": "Descripción..."}}]
+        "parrafos_introductorios": [
+          "Párrafo de contextualización formal del periodo reportado en el marco de la obligación.",
+          "Párrafo de impacto técnico, lineamientos institucionales y estándares aplicados."
+        ],
+        "vinetas_desarrollo": [
+          {{"titulo": "Título de la labor técnica 1", "descripcion": "Explicación detallada de 5-7 líneas de la actuación ejecutada."}},
+          {{"titulo": "Título de la labor técnica 2", "descripcion": "Explicación detallada de 5-7 líneas de la actuación ejecutada."}}
+        ],
+        "resultados_entregables": [
+          {{"titulo": "Producto / Entregable verificable", "descripcion": "Descripción concisa del resultado técnico consolidado."}}
+        ]
       }},
       "bloques_evidencias": [
-        {{"numero": 1, "titulo": "Título de la evidencia", "descripcion": "Explicación técnica...", "archivo_asociado": "archivo.ext"}}
+        {{
+          "numero": 1,
+          "titulo": "Título técnico formal del soporte",
+          "descripcion": "Descripción técnica de 4-5 líneas de lo que certifica este archivo como evidencia de la obligación.",
+          "archivo_asociado": "nombre_exacto_del_archivo_asignado.ext"
+        }}
       ]
     }}
   }}
@@ -787,6 +970,15 @@ def redactar_informe_con_ia(
             datos_ob = _generar_redaccion_demo_inteligente(informe, [det])["obligaciones"][k_str]
 
         texto_principal = sanitizar_texto_para_reporte(datos_ob.get("texto_tabla_principal", ""))
+        # Defensa en profundidad contra Bug de Eco (cláusula copiada literalmente)
+        clausula_inicio = det.obligacion.descripcion_clausula.strip().lower()[:30]
+        if clausula_inicio and clausula_inicio in texto_principal.lower():
+            texto_principal = re.sub(
+                r"^(?:1\.\s*)?" + re.escape(det.obligacion.descripcion_clausula[:35]),
+                "1. Ejecución y Desarrollo de Componentes Técnicos: Se procedió con la implementación",
+                texto_principal,
+                flags=re.IGNORECASE,
+            )
         desarrollo_oti = datos_ob.get("desarrollo_detallado_oti", {})
         bloques_ev = datos_ob.get("bloques_evidencias", [])
 
