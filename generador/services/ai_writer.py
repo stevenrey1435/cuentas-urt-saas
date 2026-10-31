@@ -841,17 +841,19 @@ def _llamar_hermes_agent_fifo(prompt: str) -> Optional[dict]:
                 logger.info("Hermes OAuth Codex directo no retornó JSON (%s).", exc)
 
         # B. Modo Servidor HTTP Compatible con OpenAI / Ollama Local
-        base_url = getattr(settings, "HERMES_BASE_URL", "").strip()
+        base_url = getattr(settings, "HERMES_BASE_URL", "")
         if base_url:
             try:
                 from openai import OpenAI
 
-                url_endpoint = base_url.rstrip("/")
-                if not url_endpoint.endswith("/v1"):
-                    url_endpoint = f"{url_endpoint}/v1"
+                url_limpia = base_url.strip().rstrip("/")
+                if not url_limpia.endswith("/v1"):
+                    url_limpia += "/v1"
+
+                logger.warning(">>> LLAMANDO A TU OMEN 14 EN: %s CON MODELO %s <<<", url_limpia, hermes_model)
 
                 client = OpenAI(
-                    base_url=url_endpoint,
+                    base_url=url_limpia,
                     api_key=getattr(settings, "HERMES_API_KEY", "ollama-local"),
                     default_headers={
                         "ngrok-skip-browser-warning": "true",
@@ -876,9 +878,10 @@ def _llamar_hermes_agent_fifo(prompt: str) -> Optional[dict]:
                     temperature=0.2,
                 )
                 contenido = resp.choices[0].message.content
+                logger.warning(">>> ¡RESPUESTA RECIBIDA CON ÉXITO DE OLLAMA! <<<")
                 return _extraer_json_limpio(contenido)
             except Exception as exc:
-                logger.warning("Llamada a LLM Local (Ollama/Hermes) falló (%s). Activando fallback...", exc)
+                logger.error(">>> ERROR AL LLAMAR A OLLAMA: %s <<<", exc)
 
     return None
 
@@ -978,31 +981,8 @@ def redactar_informe_con_ia(
     if not detalles:
         raise ValueError("No se encontraron obligaciones configuradas para redactar.")
 
-    huellas_actuales = {det.id: _calcular_huella_obligacion(det, informe) for det in detalles}
-    detalles_a_redactar = []
-
-    if obligacion_especifica_id is not None or bool(apuntes_generales_mes and apuntes_generales_mes.strip()) or ignorar_cache:
-        detalles_a_redactar = detalles
-    else:
-        for det in detalles:
-            datos_previos = det.desarrollo_detallado_oti if isinstance(det.desarrollo_detallado_oti, dict) else {}
-            huella_previa = datos_previos.get("_hash_cache_ia", "")
-            tiene_texto_valido = bool(
-                det.texto_tabla_principal
-                and len(det.texto_tabla_principal.strip()) > 200
-                and "no pudo ser leído" not in det.texto_tabla_principal
-                and datos_previos.get("vinetas_desarrollo")
-            )
-            if not tiene_texto_valido or huella_previa != huellas_actuales[det.id]:
-                detalles_a_redactar.append(det)
-
-    if not detalles_a_redactar:
-        return {
-            "motor_usado": f"Caché Instantáneo 0-Tokens (Sin cambios detectados — {informe.ultimo_motor_ia_usado or 'IA'})",
-            "obligaciones_actualizadas": [],
-            "creditos_informe_completo": contratista.creditos_informe_completo,
-            "creditos_regeneracion_individual": contratista.creditos_regeneracion_individual,
-        }
+    # Forzar siempre redacción limpia con tu Ollama local
+    detalles_a_redactar = detalles
 
     prompt = _construir_prompt_single_shot(informe, detalles_a_redactar, apuntes_generales_mes=apuntes_generales_mes)
     motor_usado = "Modo Offline Inteligente (0 Tokens Externos)"
