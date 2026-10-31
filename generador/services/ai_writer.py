@@ -948,6 +948,7 @@ def redactar_informe_con_ia(
     obligacion_especifica_id: Optional[int] = None,
     forzar_demo: bool = False,
     apuntes_generales_mes: str = "",
+    ignorar_cache: bool = True,
 ) -> Dict[str, Any]:
     """Punto de entrada principal de `services/ai_writer.py`."""
     contratista = informe.contratista
@@ -980,7 +981,7 @@ def redactar_informe_con_ia(
     huellas_actuales = {det.id: _calcular_huella_obligacion(det, informe) for det in detalles}
     detalles_a_redactar = []
 
-    if obligacion_especifica_id is not None or bool(apuntes_generales_mes and apuntes_generales_mes.strip()):
+    if obligacion_especifica_id is not None or bool(apuntes_generales_mes and apuntes_generales_mes.strip()) or ignorar_cache:
         detalles_a_redactar = detalles
     else:
         for det in detalles:

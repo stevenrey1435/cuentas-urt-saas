@@ -555,6 +555,51 @@ def regenerar_obligacion_individual(request, detalle_id: int):
     return redirect(f"/informes/{informe.id}/#obligacion-{detalle.obligacion.numero_obligacion}")
 
 
+def reacomodar_todas_evidencias_informe(informe: InformeMensual, detalles_lista: list) -> list:
+    """
+    Evalúa TODAS las evidencias asociadas al informe mensual y las reasigna a la obligación
+    contractual que mejor coincida por mención explícita ('ob3', 'actividad_2'), familias técnicas
+    (GitLab, Teams, Jira, DAS HLD, Seguridad, etc.), afinidad semántica con la cláusula o
+    distribución equitativa para que ninguna obligación quede desprovista de soportes.
+    """
+    if not detalles_lista:
+        return []
+
+    todas_evidencias = list(
+        ArchivoEvidencia.objects.filter(detalle_obligacion__informe=informe)
+        .select_related("detalle_obligacion__obligacion")
+        .order_by("id")
+    )
+    if not todas_evidencias:
+        return []
+
+    movimientos = []
+    for idx, ev in enumerate(todas_evidencias):
+        det_actual = ev.detalle_obligacion
+        pista_semantica = f"{ev.nombre_original} {ev.titulo_evidencia or ''} {ev.metadatos_ligeros or ''}"
+        det_destino = clasificar_obligacion_por_afinidad(
+            pista_semantica,
+            detalles_lista,
+            indice_rotacion=idx,
+        )
+        if det_destino and det_destino.id != det_actual.id:
+            ev.detalle_obligacion = det_destino
+            ev.save()
+            movimientos.append(
+                f"'{ev.nombre_original}' reasignado: Ob. {det_actual.obligacion.numero_obligacion} → Ob. {det_destino.obligacion.numero_obligacion}"
+            )
+
+    # Re-enumerar el orden secuencial de evidencias por obligación (1..N)
+    for det in detalles_lista:
+        evs_det = list(det.archivos_evidencia.order_by("orden", "id"))
+        for nuevo_orden, ev_obj in enumerate(evs_det, start=1):
+            if ev_obj.orden != nuevo_orden:
+                ev_obj.orden = nuevo_orden
+                ev_obj.save(update_fields=["orden"])
+
+    return movimientos
+
+
 @require_POST
 def generar_paquete_completo_view(request, informe_id: int):
     """
@@ -672,6 +717,17 @@ def generar_paquete_completo_view(request, informe_id: int):
                     mapa_existentes[nombre_key] = ev
                     resumen_acomodo.append(f"'{nombre_orig}' → Obligación {det_destino.obligacion.numero_obligacion}")
 
+        # 3. Reasignar y optimizar la distribución de TODAS las evidencias del informe
+        movimientos_reasignacion = reacomodar_todas_evidencias_informe(informe, detalles_lista)
+        if movimientos_reasignacion:
+            resumen_acomodo.extend(movimientos_reasignacion)
+            # Refrescar detalles_lista con las evidencias reasignadas en BD
+            detalles_lista = list(
+                informe.detalles_obligaciones.select_related("obligacion")
+                .prefetch_related("archivos_evidencia")
+                .order_by("obligacion__numero_obligacion")
+            )
+
         # Validar que las obligaciones no sean textos de prueba vacíos ('primer', 'segundo', etc.)
         obligaciones_invalidas = [
             det.obligacion.numero_obligacion
@@ -698,13 +754,14 @@ def generar_paquete_completo_view(request, informe_id: int):
             res_ia = redactar_informe_con_ia(
                 informe,
                 obligacion_especifica_id=None,
-                apuntes_generales_mes="",  # <-- Ya fueron clasificados y guardados en cada obligación arriba (Ahorra ~1.000 tokens)
+                apuntes_generales_mes="",
+                ignorar_cache=True,  # Romper siempre el caché para regenerar con datos frescos
             )
             res_pkg = construir_paquete_completo_pago(informe)
-            extra_acomodo = f" ({len(resumen_acomodo)} archivos extraídos y clasificados automáticamente)." if resumen_acomodo else ""
+            extra_acomodo = f" ({len(resumen_acomodo)} archivos clasificados/reasignados)." if resumen_acomodo else ""
             messages.success(
                 request,
-                f"¡Paquete completo generado! El Agente acomodó las evidencias y redactó las {res_pkg['total_obligaciones']} obligaciones en 1 sola pasada ({res_ia['motor_usado']}), "
+                f"¡Paquete completo generado! Se rompió el caché y la IA redactó las {res_pkg['total_obligaciones']} obligaciones en 1 sola pasada ({res_ia['motor_usado']}), "
                 f"creando los {res_pkg['total_documentos_word']} documentos Word y las carpetas Actividad_1..{res_pkg['total_obligaciones']}.{extra_acomodo} "
                 f"Créditos restantes: {res_ia['creditos_informe_completo']}.",
             )
