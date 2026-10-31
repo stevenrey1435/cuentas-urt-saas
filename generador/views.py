@@ -1267,3 +1267,93 @@ def gestionar_obligaciones_contratista(request):
         })
 
     return redirect("/?seccion=obligaciones")
+
+
+
+from django.contrib.admin.views.decorators import staff_member_required
+
+
+@staff_member_required
+def diagnostico_ia_admin_view(request):
+    """Permite al Superadmin probar en vivo la conexión entre Render y Ollama en su PC."""
+    import time
+
+    base_url = getattr(settings, "HERMES_BASE_URL", "").strip()
+    model_name = getattr(settings, "HERMES_MODEL", "qwen2.5:7b-instruct")
+    api_key = getattr(settings, "HERMES_API_KEY", "ollama-local")
+    gemini_key = getattr(settings, "GEMINI_API_KEY", "")
+    openai_key = getattr(settings, "OPENAI_API_KEY", "")
+    local_only = getattr(settings, "LOCAL_ONLY_AI", False)
+
+    resultado_ping = None
+    if request.method == "POST" or request.GET.get("probar") == "1":
+        inicio = time.time()
+        url_endpoint = base_url.rstrip("/")
+        if not url_endpoint.endswith("/v1"):
+            url_endpoint = f"{url_endpoint}/v1"
+
+        if not base_url:
+            resultado_ping = {
+                "ok": False,
+                "error": "HERMES_BASE_URL no está configurada en las variables de entorno de este servidor.",
+                "tiempo_segundos": 0,
+            }
+        else:
+            try:
+                from openai import OpenAI
+
+                client = OpenAI(
+                    base_url=url_endpoint,
+                    api_key=api_key or "ollama-local",
+                    default_headers={
+                        "ngrok-skip-browser-warning": "true",
+                        "User-Agent": "CuentasURT/1.0",
+                    },
+                    timeout=30.0,
+                    max_retries=0,
+                )
+                resp = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "Eres un asistente técnico de diagnóstico. Responde ÚNICAMENTE con un objeto JSON.",
+                        },
+                        {
+                            "role": "user",
+                            "content": "Devuelve un objeto JSON con status='ok' y mensaje='Conexión exitosa desde Render hacia tu PC'.",
+                        },
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                )
+                tiempo = round(time.time() - inicio, 2)
+                contenido = resp.choices[0].message.content
+                resultado_ping = {
+                    "ok": True,
+                    "tiempo_segundos": tiempo,
+                    "contenido": contenido,
+                    "endpoint_probado": url_endpoint,
+                    "modelo_probado": model_name,
+                }
+            except Exception as exc:
+                tiempo = round(time.time() - inicio, 2)
+                resultado_ping = {
+                    "ok": False,
+                    "error": str(exc),
+                    "tiempo_segundos": tiempo,
+                    "endpoint_probado": url_endpoint,
+                    "modelo_probado": model_name,
+                }
+
+    ctx = {
+        "title": "Diagnóstico de Conexión IA (Render ↔ PC Local)",
+        "base_url": base_url,
+        "model_name": model_name,
+        "api_key_masked": f"{api_key[:4]}***" if len(api_key) > 4 else ("Configurada" if api_key else "Sin configurar"),
+        "gemini_configurada": bool(gemini_key),
+        "openai_configurada": bool(openai_key),
+        "local_only": local_only,
+        "resultado_ping": resultado_ping,
+    }
+    return render(request, "admin/diagnostico_ia.html", ctx)

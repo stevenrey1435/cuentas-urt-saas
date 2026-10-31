@@ -1,0 +1,111 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; Diagnóstico de Conexión IA (Render ↔ PC)
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 20px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <h1 style="margin-bottom: 8px; font-size: 24px;">🔍 Diagnóstico de Conexión IA en Tiempo Real</h1>
+    <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">
+        Esta herramienta permite verificar si tu servidor en la nube (Render) puede comunicarse a través del túnel con el motor Ollama ejecutándose en tu computador local.
+    </p>
+
+    <!-- Parámetros Actuales -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <h3 style="margin-top: 0; font-size: 16px; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            ⚙️ Variables de Entorno Detectadas en este Servidor
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+            <tr style="border-bottom: 1px solid #f8fafc;">
+                <td style="padding: 8px 4px; font-weight: 600; color: #475569; width: 220px;">HERMES_BASE_URL (Túnel):</td>
+                <td style="padding: 8px 4px; font-family: monospace;">
+                    {% if base_url %}
+                        <span style="color: #0369a1; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;">{{ base_url }}</span>
+                    {% else %}
+                        <span style="color: #dc2626; background: #fee2e2; padding: 2px 6px; border-radius: 4px;">❌ No configurada (vacía)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f8fafc;">
+                <td style="padding: 8px 4px; font-weight: 600; color: #475569;">HERMES_MODEL (Ollama):</td>
+                <td style="padding: 8px 4px; font-family: monospace; color: #334155;">
+                    <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">{{ model_name }}</span>
+                </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f8fafc;">
+                <td style="padding: 8px 4px; font-weight: 600; color: #475569;">HERMES_API_KEY:</td>
+                <td style="padding: 8px 4px; color: #64748b;">{{ api_key_masked }}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f8fafc;">
+                <td style="padding: 8px 4px; font-weight: 600; color: #475569;">Fallbacks Externos:</td>
+                <td style="padding: 8px 4px;">
+                    Gemini: {% if gemini_configurada %}<span style="color: #15803d;">✔ Activo</span>{% else %}<span style="color: #94a3b8;">Desactivado</span>{% endif %}
+                    &nbsp;|&nbsp;
+                    OpenAI: {% if openai_configurada %}<span style="color: #15803d;">✔ Activo</span>{% else %}<span style="color: #94a3b8;">Desactivado</span>{% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Botón de Ejecutar Prueba -->
+    <div style="margin-bottom: 24px;">
+        <form method="POST" style="display: inline-block;">
+            {% csrf_token %}
+            <button type="submit" style="background: #2563eb; color: #ffffff; border: none; padding: 10px 22px; font-size: 14px; font-weight: 600; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(37,99,235,0.25);">
+                🚀 Probar Conexión con mi PC Ahora
+            </button>
+        </form>
+    </div>
+
+    <!-- Resultado del Ping -->
+    {% if resultado_ping %}
+        {% if resultado_ping.ok %}
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+                <h3 style="margin-top: 0; color: #166534; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                    <span>🟢</span> ¡Conexión Exitosa con tu PC!
+                </h3>
+                <p style="color: #15803d; font-size: 14px; margin-bottom: 14px;">
+                    El servidor en Render envió una solicitud a través del túnel y Ollama respondió en <strong>{{ resultado_ping.tiempo_segundos }} segundos</strong> con el formato JSON esperado.
+                </p>
+                <div style="background: #ffffff; border: 1px solid #dcfce7; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px; color: #1e293b;">
+                    <strong>Respuesta de Ollama:</strong>
+                    <pre style="margin: 8px 0 0 0; white-space: pre-wrap;">{{ resultado_ping.contenido }}</pre>
+                </div>
+            </div>
+        {% else %}
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+                <h3 style="margin-top: 0; color: #991b1b; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                    <span>🔴</span> Fallo de Comunicación con tu PC
+                </h3>
+                <p style="color: #b91c1c; font-size: 14px; margin-bottom: 12px;">
+                    El servidor no pudo obtener respuesta de Ollama. Tiempo transcurrido: {{ resultado_ping.tiempo_segundos }}s.
+                </p>
+                <div style="background: #ffffff; border: 1px solid #fee2e2; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px; color: #b91c1c; margin-bottom: 16px;">
+                    <strong>Detalle del Error:</strong>
+                    <div style="margin-top: 6px;">{{ resultado_ping.error }}</div>
+                </div>
+                <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 14px; font-size: 13px; color: #92400e;">
+                    <strong>💡 Pasos para solucionar:</strong>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>Verifica que tu túnel (Cloudflare o Ngrok) siga activo en tu computador.</li>
+                        <li>Verifica que la URL en Render (<code>HERMES_BASE_URL</code>) coincida con la URL que muestra la consola de tu túnel.</li>
+                        <li>Verifica que Ollama esté abierto en tu PC y que el modelo <code>{{ model_name }}</code> esté disponible en <code>ollama list</code>.</li>
+                    </ul>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <div>
+        <a href="{% url 'admin:index' %}" style="color: #64748b; text-decoration: none; font-size: 13px;">
+            &larr; Volver al Panel de Administración
+        </a>
+    </div>
+</div>
+{% endblock %}
+
