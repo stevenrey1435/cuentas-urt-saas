@@ -1,14 +1,9 @@
-"""Clasificación semántica local de evidencias y obligaciones.
-
-El modelo se carga de forma perezosa para no ralentizar el arranque de Django.
-Si fastembed o el modelo no están disponibles, el llamador debe conservar su
-clasificador heurístico y continuar sin ocultar el motivo en los logs.
-"""
+"""Clasificación semántica local de evidencias y obligaciones."""
 
 import logging
+import re
 from functools import lru_cache
 from typing import Any, Optional
-
 import numpy as np
 from django.conf import settings
 
@@ -21,7 +16,6 @@ def _obtener_modelo():
         return None
     try:
         from fastembed import TextEmbedding
-
         kwargs = {"model_name": getattr(settings, "LOCAL_SEMANTIC_MODEL", "intfloat/multilingual-e5-small")}
         cache_dir = getattr(settings, "LOCAL_SEMANTIC_CACHE_DIR", "")
         if cache_dir:
@@ -33,69 +27,55 @@ def _obtener_modelo():
 
 
 def _normalizar_vector(vector: Any) -> np.ndarray:
-    resultado = np.asarray(vector, dtype=np.float32)
-    norma = np.linalg.norm(resultado)
-    return resultado / norma if norma else resultado
+    res = np.asarray(vector, dtype=np.float32)
+    norm = np.linalg.norm(res)
+    return res / norm if norm else res
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=64)
 def _vectorizar_obligaciones(model_name: str, obligaciones: tuple[str, ...]) -> tuple[np.ndarray, ...]:
     modelo = _obtener_modelo()
     if modelo is None:
         return ()
-    usa_prefijos_e5 = model_name.lower().startswith("intfloat/multilingual-e5")
-    textos = [
-        f"passage: {clausula}" if usa_prefijos_e5 else clausula
-        for clausula in obligaciones
-    ]
-    return tuple(_normalizar_vector(vector) for vector in modelo.embed(textos))
+    usa_prefijos = model_name.lower().startswith("intfloat/multilingual-e5")
+    textos = [f"passage: {c}" if usa_prefijos else c for c in obligaciones]
+    return tuple(_normalizar_vector(v) for v in modelo.embed(textos))
 
 
 def puntuar_obligaciones_semanticamente(
     texto_evidencia: str,
     detalles: list,
 ) -> Optional[dict[int, float]]:
-    """Devuelve similitudes coseno por obligación o None si no puede cargar el modelo."""
     texto = (texto_evidencia or "").strip()
     if not texto or not detalles:
         return None
-    max_obligaciones = getattr(settings, "LOCAL_SEMANTIC_MAX_OBLIGATIONS", 24)
-    if len(detalles) > max_obligaciones:
-        logger.info(
-            "Afinidad semántica omitida: %s obligaciones supera el límite local de %s.",
-            len(detalles),
-            max_obligaciones,
-        )
+
+    # Si es solo un nombre de captura genérico (ej. "imagen (2).png"), NO usar embeddings para evitar falsos positivos
+    nombre_limpio = os.path.basename(texto).lower()
+    if re.match(r"^(imagen|image|captura|screenshot|img|paste|imgpsh)[\s_\-\(\d\)]*\.(png|jpg|jpeg)$", nombre_limpio):
         return None
 
     modelo = _obtener_modelo()
     if modelo is None:
         return None
 
-    obligaciones = [
-        (det.obligacion.numero_obligacion, (det.obligacion.descripcion_clausula or "").strip())
-        for det in detalles
+    obligaciones_validas = [
+        (d.obligacion.numero_obligacion, (d.obligacion.descripcion_clausula or "").strip())
+        for d in detalles
+        if (d.obligacion.descripcion_clausula or "").strip()
     ]
-    obligaciones_validas = [(numero, clausula) for numero, clausula in obligaciones if clausula]
     if not obligaciones_validas:
         return None
 
     try:
-        model_name = getattr(
-            settings,
-            "LOCAL_SEMANTIC_MODEL",
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-        )
-        usa_prefijos_e5 = model_name.lower().startswith("intfloat/multilingual-e5")
-        evidencia_texto = f"query: {texto}" if usa_prefijos_e5 else texto
-        evidencia = _normalizar_vector(next(modelo.embed([evidencia_texto])))
-        vectores_obligaciones = _vectorizar_obligaciones(
-            model_name,
-            tuple(clausula for _, clausula in obligaciones_validas),
-        )
+        model_name = getattr(settings, "LOCAL_SEMANTIC_MODEL", "intfloat/multilingual-e5-small")
+        usa_prefijos = model_name.lower().startswith("intfloat/multilingual-e5")
+        query_text = f"query: {texto}" if usa_prefijos else texto
+        evidencia_vec = _normalizar_vector(next(modelo.embed([query_text])))
+        vectores_ob = _vectorizar_obligaciones(model_name, tuple(c for _, c in obligaciones_validas))
         return {
-            numero: float(np.dot(evidencia, vector))
-            for (numero, _), vector in zip(obligaciones_validas, vectores_obligaciones)
+            num: float(np.dot(evidencia_vec, vec))
+            for (num, _), vec in zip(obligaciones_validas, vectores_ob)
         }
     except Exception as exc:
         logger.warning("No se pudo calcular afinidad semántica local: %s", exc)
