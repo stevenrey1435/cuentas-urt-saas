@@ -592,6 +592,14 @@ def generar_paquete_completo_view(request, informe_id: int):
     try:
         resumen_acomodo = []
 
+        # La carga de embeddings puede consumir cientos de MB y descargar el modelo
+        # durante la primera petición. En Render se mantiene desactivada salvo que
+        # LOCAL_SEMANTIC_ENABLED=True se configure explícitamente.
+        from django.conf import settings
+        if not getattr(settings, "LOCAL_SEMANTIC_ENABLED", False):
+            from .services import semantic_matcher
+            semantic_matcher._obtener_modelo.cache_clear()
+
         # 0. Si había algún .zip crudo guardado previamente en la BD, desempaquetarlo primero
         resumen_acomodo.extend(_desempacar_zips_pendientes_en_informe(informe, detalles_lista))
 

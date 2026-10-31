@@ -59,6 +59,14 @@ def puntuar_obligaciones_semanticamente(
     texto = (texto_evidencia or "").strip()
     if not texto or not detalles:
         return None
+    max_obligaciones = getattr(settings, "LOCAL_SEMANTIC_MAX_OBLIGATIONS", 24)
+    if len(detalles) > max_obligaciones:
+        logger.info(
+            "Afinidad semántica omitida: %s obligaciones supera el límite local de %s.",
+            len(detalles),
+            max_obligaciones,
+        )
+        return None
 
     modelo = _obtener_modelo()
     if modelo is None:
