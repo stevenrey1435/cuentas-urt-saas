@@ -43,6 +43,11 @@ urlpatterns = [
         name="eliminar_evidencia",
     ),
     path(
+        "evidencias/<int:evidencia_id>/guardar-observacion/",
+        views.guardar_observacion_evidencia,
+        name="guardar_observacion_evidencia",
+    ),
+    path(
         "creditos/recargar-demo/",
         views.recargar_creditos_demo,
         name="recargar_creditos_demo",

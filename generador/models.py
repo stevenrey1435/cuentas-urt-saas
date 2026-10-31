@@ -501,6 +501,12 @@ class ArchivoEvidencia(models.Model):
         default="",
         verbose_name="Título Técnico de la Evidencia",
     )
+    observacion_usuario = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Observación del Contratista para la IA",
+        help_text="Contexto específico ingresado en el visor para alimentar el prompt de la IA.",
+    )
     descripcion_tecnica_ia = models.TextField(
         blank=True,
         default="",
@@ -528,6 +534,22 @@ class ArchivoEvidencia(models.Model):
         ext = os.path.splitext(self.nombre_original.lower())[1]
         return self.tipo_archivo == "IMAGEN" or ext in (".png", ".jpg", ".jpeg", ".bmp", ".webp")
 
+    @property
+    def url_archivo(self) -> str:
+        try:
+            return self.archivo.url if self.archivo else ""
+        except Exception:
+            return ""
+
+    @property
+    def observacion_efectiva(self) -> str:
+        """Devuelve la observación del usuario o su nota técnica si fue provista."""
+        if self.observacion_usuario and self.observacion_usuario.strip():
+            return self.observacion_usuario.strip()
+        if self.titulo_evidencia and not self.titulo_evidencia.startswith("Soporte Técnico Obligación"):
+            return self.titulo_evidencia.strip()
+        return ""
+
     def resumen_para_prompt_ia(self) -> str:
         """
         Representación hiper-compacta de alta densidad semántica (Máx ~65 tokens por archivo).
@@ -535,6 +557,10 @@ class ArchivoEvidencia(models.Model):
         """
         partes = [f"{self.nombre_original} ({self.tipo_archivo})"]
         meta = self.metadatos_ligeros or {}
+
+        obs = self.observacion_efectiva
+        if obs:
+            partes.append(f"Observación:{obs[:180]}")
 
         tag = meta.get("tag_semantico")
         if tag:
@@ -557,9 +583,6 @@ class ArchivoEvidencia(models.Model):
             ][:4]
             if lineas_utiles:
                 partes.append("Extracto:" + " | ".join(lineas_utiles))
-
-        if self.titulo_evidencia and not self.titulo_evidencia.startswith("Soporte Técnico Obligación"):
-            partes.append(f"Nota:{self.titulo_evidencia[:90]}")
 
         return " ".join(partes)[:280]
 

@@ -167,11 +167,16 @@
                 <h3 class="text-base font-extrabold text-white">Tus Obligaciones Contractuales ({{ total_obligaciones }})</h3>
                 <p class="text-xs text-slate-400">Revisa la redacción de cada punto o copia el texto directo para tu informe.</p>
             </div>
-            <div class="flex items-center gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+                <button type="button" onclick="abrirVisorEvidencia()"
+                        id="btn-abrir-visor-global"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
+                    <span>👁️ Visor de Evidencias (<span id="total-evidencias-badge">{{ total_evidencias_informe }}</span>)</span>
+                </button>
                 <button type="button" onclick="guardarTodasObligacionesInforme()"
                         id="btn-guardar-todas-informe"
                         class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
-                    <span>💾 Guardar Todas las Obligaciones</span>
+                    <span>💾 Guardar Todas</span>
                 </button>
                 <button type="button" onclick="expandirTodasObligaciones(true)" class="text-slate-400 hover:text-white px-2 py-1 rounded-lg">Expandir</button>
                 <button type="button" onclick="expandirTodasObligaciones(false)" class="text-slate-400 hover:text-white px-2 py-1 rounded-lg">Colapsar</button>
@@ -236,23 +241,60 @@
                         <!-- Soportes de esta Obligación (Compacto y en Tiempo Real) -->
                         <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-semibold text-slate-300">
-                                    Soportes asignados a esta obligación (<span class="span-contador-{{ det.id }}">{{ det.archivos_evidencia.count }}</span>)
-                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-semibold text-slate-300">
+                                        Soportes asignados (<span class="span-contador-{{ det.id }}">{{ det.archivos_evidencia.count }}</span>)
+                                    </span>
+                                    {% if det.archivos_evidencia.all %}
+                                    <button type="button" onclick="abrirVisorEvidencia(null, {{ det.obligacion.numero_obligacion }})"
+                                            class="bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold px-2 py-0.5 rounded-lg text-[11px] transition flex items-center gap-1">
+                                        <span>👁️ Visor 1 a 1</span>
+                                    </button>
+                                    {% endif %}
+                                </div>
                                 <a href="{% url 'generador:descargar_documento_individual' informe.id 'anexo_obligacion' det.obligacion.numero_obligacion %}"
                                    class="text-[11px] text-emerald-400 hover:underline">
                                     Descargar Word de Soportes
                                 </a>
                             </div>
 
-                            <div id="contenedor-soportes-{{ det.id }}" class="space-y-1.5 max-h-40 overflow-y-auto pr-1 {% if not det.archivos_evidencia.all %}hidden{% endif %}">
+                            <div id="contenedor-soportes-{{ det.id }}" class="space-y-2 max-h-56 overflow-y-auto pr-1 {% if not det.archivos_evidencia.all %}hidden{% endif %}">
                                 {% for ev in det.archivos_evidencia.all %}
-                                <div id="fila-evidencia-{{ ev.id }}" class="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center justify-between gap-2 text-xs">
-                                    <span class="font-semibold text-slate-200 truncate flex-1">{{ ev.nombre_original }}</span>
-                                    <button type="button" onclick="eliminarSoporteIndividualAJAX({{ ev.id }}, {{ det.id }}, '{{ ev.nombre_original|escapejs }}')"
-                                            title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-0.5 rounded bg-rose-950/40 hover:bg-rose-900/60 transition">
-                                        ✕
-                                    </button>
+                                <div id="fila-evidencia-{{ ev.id }}" class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group">
+                                    <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia({{ ev.id }})" title="Clic para abrir en visor y agregar observación">
+                                        {% if ev.es_imagen and ev.url_archivo %}
+                                        <img src="{{ ev.url_archivo }}" alt="{{ ev.nombre_original }}" class="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0 bg-slate-950">
+                                        {% else %}
+                                        <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-300 font-bold text-[10px]">
+                                            {{ ev.tipo_archivo|slice:":3" }}
+                                        </div>
+                                        {% endif %}
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="font-semibold text-slate-200 truncate">{{ ev.nombre_original }}</span>
+                                                <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                                            </div>
+                                            <p id="snippet-obs-{{ ev.id }}" class="text-[11px] text-slate-400 truncate mt-0.5">
+                                                {% if ev.observacion_usuario %}
+                                                    <span class="text-emerald-400 font-medium">📝 {{ ev.observacion_usuario }}</span>
+                                                {% elif ev.titulo_evidencia and not "Soporte Técnico Obligación" in ev.titulo_evidencia %}
+                                                    <span class="text-slate-300 font-medium">📝 {{ ev.titulo_evidencia }}</span>
+                                                {% else %}
+                                                    <span class="text-slate-500 italic">+ Añadir observación para la IA...</span>
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <button type="button" onclick="abrirVisorEvidencia({{ ev.id }})"
+                                                title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                                            ✏️ Nota IA
+                                        </button>
+                                        <button type="button" onclick="eliminarSoporteIndividualAJAX({{ ev.id }}, {{ det.id }}, '{{ ev.nombre_original|escapejs }}')"
+                                                title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                                            ✕
+                                        </button>
+                                    </div>
                                 </div>
                                 {% endfor %}
                             </div>
@@ -295,7 +337,347 @@
 
 </div>
 
+
+<!-- MODAL VISOR INTERACTIVO DE EVIDENCIAS (1 A 1) -->
+<div id="modal-visor-evidencias" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in duration-150">
+        <!-- Header -->
+        <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-3.5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+                    👁️
+                </span>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-xs sm:text-sm font-bold text-white truncate">Visor de Evidencias (1 a 1)</h3>
+                        <span id="visor-filtro-badge" class="hidden text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700"></span>
+                    </div>
+                    <p class="text-[11px] text-slate-400">
+                        Observación técnica guiada para entrenar y alimentar la redacción IA
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- Dropdown de filtro por obligación -->
+                <select id="visor-filtro-ob" onchange="cambiarFiltroObligacionVisor(this.value)"
+                        class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500">
+                    <option value="todas">Todas las Obligaciones</option>
+                    {% for det in detalles %}
+                    <option value="{{ det.obligacion.numero_obligacion }}">Ob. {{ det.obligacion.numero_obligacion }} ({{ det.archivos_evidencia.count }} soportes)</option>
+                    {% endfor %}
+                </select>
+
+                <button type="button" onclick="cerrarVisorEvidencia()"
+                        class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition text-sm">
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <!-- Body: 2 Columns (Viewer + Observation) -->
+        <div id="visor-contenido-wrapper" class="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <!-- Left Col (Col 7): Preview Area -->
+            <div class="lg:col-span-7 flex flex-col gap-3 min-w-0">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span id="visor-contador-slide" class="font-bold text-emerald-400">Evidencia 1 de 17</span>
+                    <span id="visor-ob-tag" class="text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded-lg border border-indigo-900/60">Obligación 1</span>
+                </div>
+
+                <div id="visor-preview-box" class="bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center p-3 relative min-h-[320px] max-h-[460px] overflow-hidden group">
+                    <!-- Image or Document Card will be injected dynamically -->
+                </div>
+
+                <!-- Navigation Controls -->
+                <div class="flex items-center justify-between gap-3 pt-1">
+                    <button type="button" onclick="visorNavegar(-1)" id="btn-visor-prev"
+                            class="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition">
+                        <span>◀ Anterior</span>
+                    </button>
+
+                    <div class="flex items-center gap-2">
+                        <a id="visor-btn-descargar" href="#" target="_blank"
+                           class="text-slate-400 hover:text-slate-200 text-xs px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition flex items-center gap-1">
+                            <span>Descargar</span>
+                        </a>
+                        <a id="visor-btn-zoom" href="#" target="_blank"
+                           class="text-slate-400 hover:text-slate-200 text-xs px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition flex items-center gap-1">
+                            <span>🔍 Pantalla completa</span>
+                        </a>
+                    </div>
+
+                    <button type="button" onclick="visorNavegar(1)" id="btn-visor-next"
+                            class="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition">
+                        <span>Siguiente ▶</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Col (Col 5): Observation and Prompt Integration Area -->
+            <div class="lg:col-span-5 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4">
+                <div class="space-y-3.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                            <span>🧠</span> Contexto para la IA
+                        </span>
+                        <span id="visor-tipo-archivo" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            IMAGEN
+                        </span>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[11px] text-slate-400">Archivo Soporte:</label>
+                        <p id="visor-nombre-archivo" class="text-xs font-semibold text-white break-all bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                            ejemplo_soporte.png
+                        </p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-bold text-slate-200 flex items-center justify-between">
+                            <span>Observación / Actividad Ejecutada:</span>
+                        </label>
+                        <p class="text-[11px] text-slate-400 leading-snug">
+                            Describe en tus palabras qué demuestra este soporte (reunión, pantalla, corrección, commit, etc.). <strong>La IA tomará esta observación como fuente principal de verdad</strong> para redactar tu cuenta con precisión 5.0.
+                        </p>
+                        <textarea id="visor-input-observacion" rows="6"
+                                  placeholder="Ej: Se participó en la reunión de arquitectura técnica del 12 de octubre con el equipo de la OTI, donde se validó el modelo de base de datos..."
+                                  oninput="visorObservacionModificada()"
+                                  class="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition leading-relaxed"></textarea>
+                    </div>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between">
+                        <span id="visor-status-save" class="text-[11px] text-slate-400 flex items-center gap-1">
+                            Listo para editar
+                        </span>
+                        <button type="button" id="btn-guardar-obs-visor" onclick="guardarObservacionActualVisor()"
+                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5">
+                            <span>💾 Guardar para la IA</span>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 text-center">
+                        Tip: También se guarda automáticamente al cambiar de soporte o cerrar el visor.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State inside modal if no evidences -->
+        <div id="visor-empty-state" class="hidden p-12 text-center space-y-3">
+            <span class="text-3xl">📂</span>
+            <p class="text-sm font-semibold text-slate-300">No hay soportes cargados en esta vista.</p>
+            <p class="text-xs text-slate-500">Agrega soportes a las obligaciones para visualizarlos y describirlos aquí.</p>
+        </div>
+    </div>
+</div>
+
 <script>
+
+    // ==========================================
+    // VISOR INTERACTIVO DE EVIDENCIAS (1 A 1)
+    // ==========================================
+    let TODAS_EVIDENCIAS = {{ todas_evidencias_json|safe }};
+    let evidenciasFiltradas = [];
+    let indiceActual = 0;
+    let observacionModificada = false;
+
+    function abrirVisorEvidencia(evidenciaId = null, numeroObligacion = null) {
+        const selectOb = document.getElementById('visor-filtro-ob');
+        if (numeroObligacion) {
+            selectOb.value = String(numeroObligacion);
+        } else if (!selectOb.value) {
+            selectOb.value = 'todas';
+        }
+
+        cambiarFiltroObligacionVisor(selectOb.value, false);
+
+        if (evidenciaId) {
+            const idxEncontrado = evidenciasFiltradas.findIndex(e => e.id === evidenciaId);
+            if (idxEncontrado !== -1) {
+                indiceActual = idxEncontrado;
+            } else {
+                // Si no está en el filtro actual, cambiar a 'todas'
+                selectOb.value = 'todas';
+                cambiarFiltroObligacionVisor('todas', false);
+                const idxTodas = evidenciasFiltradas.findIndex(e => e.id === evidenciaId);
+                indiceActual = idxTodas !== -1 ? idxTodas : 0;
+            }
+        }
+
+        renderSlideActual();
+        const modal = document.getElementById('modal-visor-evidencias');
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    async function cerrarVisorEvidencia() {
+        if (observacionModificada) {
+            await guardarObservacionActualVisor();
+        }
+        const modal = document.getElementById('modal-visor-evidencias');
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    function cambiarFiltroObligacionVisor(valor, reRender = true) {
+        if (valor === 'todas') {
+            evidenciasFiltradas = [...TODAS_EVIDENCIAS];
+        } else {
+            const num = parseInt(valor, 10);
+            evidenciasFiltradas = TODAS_EVIDENCIAS.filter(e => e.numero_obligacion === num);
+        }
+        indiceActual = 0;
+        if (reRender) {
+            renderSlideActual();
+        }
+    }
+
+    function visorObservacionModificada() {
+        observacionModificada = true;
+        const statusEl = document.getElementById('visor-status-save');
+        statusEl.innerHTML = '<span class="text-amber-400">✏️ Cambios sin guardar...</span>';
+    }
+
+    function renderSlideActual() {
+        const wrapper = document.getElementById('visor-contenido-wrapper');
+        const emptyState = document.getElementById('visor-empty-state');
+
+        if (!evidenciasFiltradas || evidenciasFiltradas.length === 0) {
+            wrapper.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+            return;
+        }
+
+        wrapper.classList.remove('hidden');
+        emptyState.classList.add('hidden');
+
+        const ev = evidenciasFiltradas[indiceActual];
+        if (!ev) return;
+
+        observacionModificada = false;
+        document.getElementById('visor-status-save').innerHTML = '<span class="text-slate-400">Listo para editar</span>';
+
+        document.getElementById('visor-contador-slide').textContent = `Evidencia ${indiceActual + 1} de ${evidenciasFiltradas.length}`;
+        document.getElementById('visor-ob-tag').textContent = `Obligación ${ev.numero_obligacion}`;
+        document.getElementById('visor-nombre-archivo').textContent = ev.nombre_original;
+        document.getElementById('visor-tipo-archivo').textContent = ev.tipo_archivo;
+
+        const txtObs = document.getElementById('visor-input-observacion');
+        txtObs.value = ev.observacion || (ev.titulo && !ev.titulo.startsWith('Soporte Técnico Obligación') ? ev.titulo : '');
+
+        const pBox = document.getElementById('visor-preview-box');
+        const btnZoom = document.getElementById('visor-btn-zoom');
+        const btnDescargar = document.getElementById('visor-btn-descargar');
+
+        btnDescargar.href = ev.url || '#';
+        btnZoom.href = ev.url || '#';
+
+        if (ev.es_imagen && ev.url) {
+            btnZoom.classList.remove('hidden');
+            pBox.innerHTML = `
+                <img src="${ev.url}" alt="${ev.nombre_original}"
+                     class="max-h-[420px] max-w-full object-contain rounded-xl shadow-md cursor-pointer transition hover:scale-[1.01]"
+                     onclick="window.open('${ev.url}', '_blank')">
+            `;
+        } else {
+            btnZoom.classList.add('hidden');
+            pBox.innerHTML = `
+                <div class="text-center p-6 space-y-3">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl font-bold text-emerald-400">
+                        📄
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-white break-all">${ev.nombre_original}</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Soporte tipo ${ev.tipo_archivo} (${ev.tamano_kb} KB)</p>
+                    </div>
+                    ${ev.url ? `<a href="${ev.url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline">Descargar o Abrir Archivo Original ↗</a>` : ''}
+                </div>
+            `;
+        }
+
+        const btnPrev = document.getElementById('btn-visor-prev');
+        const btnNext = document.getElementById('btn-visor-next');
+        btnPrev.disabled = (indiceActual === 0);
+        btnPrev.classList.toggle('opacity-50', indiceActual === 0);
+        btnNext.disabled = (indiceActual === evidenciasFiltradas.length - 1);
+        btnNext.classList.toggle('opacity-50', indiceActual === evidenciasFiltradas.length - 1);
+    }
+
+    async function visorNavegar(delta) {
+        if (observacionModificada) {
+            await guardarObservacionActualVisor();
+        }
+        const nuevoIndice = indiceActual + delta;
+        if (nuevoIndice >= 0 && nuevoIndice < evidenciasFiltradas.length) {
+            indiceActual = nuevoIndice;
+            renderSlideActual();
+        }
+    }
+
+    async function guardarObservacionActualVisor() {
+        if (!evidenciasFiltradas || evidenciasFiltradas.length === 0) return;
+        const ev = evidenciasFiltradas[indiceActual];
+        if (!ev) return;
+
+        const txtObs = document.getElementById('visor-input-observacion').value.trim();
+        const statusEl = document.getElementById('visor-status-save');
+        const btnGuardar = document.getElementById('btn-guardar-obs-visor');
+
+        statusEl.innerHTML = '<span class="text-amber-400">⏳ Guardando...</span>';
+        btnGuardar.disabled = true;
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+            formData.append('observacion', txtObs);
+
+            const res = await fetch(`/evidencias/${ev.id}/guardar-observacion/`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                ev.observacion = txtObs;
+                observacionModificada = false;
+                statusEl.innerHTML = '<span class="text-emerald-400 font-semibold">✓ Guardado para la IA</span>';
+
+                const globalEv = TODAS_EVIDENCIAS.find(item => item.id === ev.id);
+                if (globalEv) globalEv.observacion = txtObs;
+
+                const snippetEl = document.getElementById(`snippet-obs-${ev.id}`);
+                if (snippetEl) {
+                    if (txtObs) {
+                        snippetEl.innerHTML = `<span class="text-emerald-400 font-medium">📝 ${txtObs.replace(/</g, '&lt;')}</span>`;
+                    } else {
+                        snippetEl.innerHTML = `<span class="text-slate-500 italic">+ Añadir observación para la IA...</span>`;
+                    }
+                }
+                mostrarToast('✓ Observación vinculada a la IA exitosamente');
+            } else {
+                throw new Error(data.error || 'Error al guardar observación');
+            }
+        } catch (err) {
+            statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Error: ${err.message}</span>`;
+        } finally {
+            btnGuardar.disabled = false;
+        }
+    }
+
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('modal-visor-evidencias');
+        if (!modal || modal.classList.contains('hidden')) return;
+
+        if (e.key === 'Escape') {
+            cerrarVisorEvidencia();
+        } else if (e.key === 'ArrowLeft' && document.activeElement.tagName !== 'TEXTAREA') {
+            visorNavegar(-1);
+        } else if (e.key === 'ArrowRight' && document.activeElement.tagName !== 'TEXTAREA') {
+            visorNavegar(1);
+        }
+    });
+
     function _obtenerCSRFToken() {
         return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
     }
@@ -340,17 +722,62 @@
         archivos.forEach(ev => {
             const nombreEscapado = ev.nombre_original.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             const nombreJs = ev.nombre_original.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            const obsSnippet = ev.observacion ?
+                `<span class="text-emerald-400 font-medium">📝 ${ev.observacion.replace(/</g, '&lt;')}</span>` :
+                `<span class="text-slate-500 italic">+ Añadir observación para la IA...</span>`;
+
+            const imgHtml = (ev.es_imagen && ev.url) ?
+                `<img src="${ev.url}" alt="${nombreEscapado}" class="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0 bg-slate-950">` :
+                `<div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-300 font-bold text-[10px]">${(ev.tipo_archivo || 'DOC').slice(0, 3)}</div>`;
+
             html += `
-                <div id="fila-evidencia-${ev.id}" class="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center justify-between gap-2 text-xs">
-                    <span class="font-semibold text-slate-200 truncate flex-1">${nombreEscapado}</span>
-                    <button type="button" onclick="eliminarSoporteIndividualAJAX(${ev.id}, ${detalleId}, '${nombreJs}')"
-                            title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-0.5 rounded bg-rose-950/40 hover:bg-rose-900/60 transition">
-                        ✕
-                    </button>
+                <div id="fila-evidencia-${ev.id}" class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group">
+                    <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia(${ev.id})" title="Clic para abrir en visor y agregar observación">
+                        ${imgHtml}
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-semibold text-slate-200 truncate">${nombreEscapado}</span>
+                                <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                            </div>
+                            <p id="snippet-obs-${ev.id}" class="text-[11px] text-slate-400 truncate mt-0.5">${obsSnippet}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="abrirVisorEvidencia(${ev.id})"
+                                title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                            ✏️ Nota IA
+                        </button>
+                        <button type="button" onclick="eliminarSoporteIndividualAJAX(${ev.id}, ${detalleId}, '${nombreJs}')"
+                                title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                            ✕
+                        </button>
+                    </div>
                 </div>
             `;
+
+            // Actualizar o insertar en TODAS_EVIDENCIAS
+            const idxExistente = TODAS_EVIDENCIAS.findIndex(item => item.id === ev.id);
+            if (idxExistente !== -1) {
+                TODAS_EVIDENCIAS[idxExistente] = {...TODAS_EVIDENCIAS[idxExistente], ...ev};
+            } else {
+                TODAS_EVIDENCIAS.push({
+                    id: ev.id,
+                    detalle_id: detalleId,
+                    numero_obligacion: ev.numero_obligacion || 1,
+                    nombre_original: ev.nombre_original,
+                    tipo_archivo: ev.tipo_archivo,
+                    es_imagen: ev.es_imagen,
+                    url: ev.url,
+                    tamano_kb: Math.round((ev.tamano_bytes || 0) / 1024),
+                    observacion: ev.observacion || '',
+                });
+            }
         });
         contenedor.innerHTML = html;
+
+        // Actualizar badge global de evidencias
+        const badge = document.getElementById('total-evidencias-badge');
+        if (badge) badge.textContent = TODAS_EVIDENCIAS.length;
     }
 
     // Subir soporte individual tan pronto se selecciona en el input

@@ -290,6 +290,23 @@ def detalle_informe(request, informe_id: int):
     total_obs = detalles.count()
     request.session["contratista_activo_id"] = contratista.id
 
+    todas_evidencias_data = []
+    for det in detalles:
+        for ev in det.archivos_evidencia.all():
+            todas_evidencias_data.append({
+                "id": ev.id,
+                "detalle_id": det.id,
+                "numero_obligacion": det.obligacion.numero_obligacion,
+                "clausula_corta": (det.obligacion.descripcion_clausula[:80] + "...") if len(det.obligacion.descripcion_clausula) > 80 else det.obligacion.descripcion_clausula,
+                "nombre_original": ev.nombre_original,
+                "tipo_archivo": ev.tipo_archivo,
+                "es_imagen": ev.es_imagen,
+                "url": ev.url_archivo,
+                "tamano_kb": round(ev.tamano_bytes / 1024, 1) if ev.tamano_bytes else 0,
+                "observacion": getattr(ev, "observacion_usuario", "") or "",
+                "titulo": ev.titulo_evidencia or "",
+            })
+
     context = {
         "informe": informe,
         "contratista": contratista,
@@ -298,6 +315,8 @@ def detalle_informe(request, informe_id: int):
         "total_documentos_esperados": total_obs * 2 + 2,
         "zip_disponible": zip_disponible,
         "meses_choices": InformeMensual.MESES_CHOICES,
+        "todas_evidencias_json": json.dumps(todas_evidencias_data),
+        "total_evidencias_informe": len(todas_evidencias_data),
     }
     return render(request, "generador/detalle_informe.html", context)
 
@@ -383,12 +402,14 @@ def guardar_obligacion(request, detalle_id: int):
 
     # Actualizar notas/contexto de evidencias existentes si el usuario las editó
     for ev_existente in detalle.archivos_evidencia.all():
+        key_obs = f"observacion_evidencia_{ev_existente.id}"
         key_nota = f"nota_evidencia_{ev_existente.id}"
-        if key_nota in request.POST:
-            nueva_nota = request.POST.get(key_nota, "").strip()
-            if nueva_nota != ev_existente.titulo_evidencia:
-                ev_existente.titulo_evidencia = nueva_nota[:300]
-                ev_existente.save()
+        if key_obs in request.POST or key_nota in request.POST:
+            nueva_obs = request.POST.get(key_obs, request.POST.get(key_nota, "")).strip()
+            ev_existente.observacion_usuario = nueva_obs
+            if not ev_existente.titulo_evidencia or ev_existente.titulo_evidencia.startswith("Soporte Técnico Obligación"):
+                ev_existente.titulo_evidencia = nueva_obs[:300]
+            ev_existente.save(update_fields=["observacion_usuario", "titulo_evidencia"])
 
     # Procesar archivos soporte subidos en la obligación K (si viene un .zip, extrae todos sus archivos válidos)
     archivos_raw = request.FILES.getlist("archivos_soporte")
@@ -440,6 +461,10 @@ def guardar_obligacion(request, detalle_id: int):
                 "nombre_original": ev_item.nombre_original,
                 "tipo_archivo": ev_item.tipo_archivo,
                 "tamano_bytes": ev_item.tamano_bytes,
+                "es_imagen": ev_item.es_imagen,
+                "url": ev_item.url_archivo,
+                "observacion": getattr(ev_item, "observacion_usuario", "") or "",
+                "numero_obligacion": detalle.obligacion.numero_obligacion,
             }
             for ev_item in detalle.archivos_evidencia.all().order_by("orden", "id")
         ]
@@ -500,6 +525,37 @@ def eliminar_evidencia(request, evidencia_id: int):
 
 
 @require_POST
+def guardar_observacion_evidencia(request, evidencia_id: int):
+    """
+    Guarda la observación/contexto de un soporte ingresada en el Visor de Evidencias.
+    Alimenta directamente los metadatos semánticos y el prompt del redactor IA.
+    """
+    contratista_sesion = _obtener_contratista_activo(request)
+    if not contratista_sesion:
+        return JsonResponse({"ok": False, "error": "Sesión no válida o expirada"}, status=401)
+
+    ev = get_object_or_404(
+        ArchivoEvidencia.objects.select_related("detalle_obligacion__obligacion", "detalle_obligacion__informe"),
+        id=evidencia_id,
+        detalle_obligacion__informe__contratista=contratista_sesion,
+    )
+
+    observacion = request.POST.get("observacion", "").strip()
+    ev.observacion_usuario = observacion
+    if observacion and (not ev.titulo_evidencia or ev.titulo_evidencia.startswith("Soporte Técnico Obligación")):
+        ev.titulo_evidencia = observacion[:300]
+    ev.save(update_fields=["observacion_usuario", "titulo_evidencia"])
+
+    return JsonResponse({
+        "ok": True,
+        "mensaje": "Observación guardada con éxito para alimentar la IA.",
+        "evidencia_id": ev.id,
+        "observacion": ev.observacion_usuario,
+        "titulo_evidencia": ev.titulo_evidencia,
+    })
+
+
+@require_POST
 def regenerar_obligacion_individual(request, detalle_id: int):
     """
     Botón 'Regenerar solo esta obligación':
@@ -524,12 +580,14 @@ def regenerar_obligacion_individual(request, detalle_id: int):
         detalle.save()
 
     for ev_existente in detalle.archivos_evidencia.all():
+        key_obs = f"observacion_evidencia_{ev_existente.id}"
         key_nota = f"nota_evidencia_{ev_existente.id}"
-        if key_nota in request.POST:
-            nueva_nota = request.POST.get(key_nota, "").strip()
-            if nueva_nota != ev_existente.titulo_evidencia:
-                ev_existente.titulo_evidencia = nueva_nota[:300]
-                ev_existente.save()
+        if key_obs in request.POST or key_nota in request.POST:
+            nueva_obs = request.POST.get(key_obs, request.POST.get(key_nota, "")).strip()
+            ev_existente.observacion_usuario = nueva_obs
+            if not ev_existente.titulo_evidencia or ev_existente.titulo_evidencia.startswith("Soporte Técnico Obligación"):
+                ev_existente.titulo_evidencia = nueva_obs[:300]
+            ev_existente.save(update_fields=["observacion_usuario", "titulo_evidencia"])
 
     try:
         res_ia = redactar_informe_con_ia(informe, obligacion_especifica_id=detalle.obligacion_id)
@@ -576,7 +634,8 @@ def reacomodar_todas_evidencias_informe(informe: InformeMensual, detalles_lista:
     movimientos = []
     for idx, ev in enumerate(todas_evidencias):
         det_actual = ev.detalle_obligacion
-        pista_semantica = f"{ev.nombre_original} {ev.titulo_evidencia or ''} {ev.metadatos_ligeros or ''}"
+        obs_texto = getattr(ev, "observacion_usuario", "") or ev.titulo_evidencia or ""
+        pista_semantica = f"{ev.nombre_original} {obs_texto} {ev.metadatos_ligeros or ''}"
         det_destino = clasificar_obligacion_por_afinidad(
             pista_semantica,
             detalles_lista,

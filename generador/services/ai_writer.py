@@ -584,7 +584,8 @@ def _distribuir_evidencias_balanceadas(informe, detalles_lista: List[Any]) -> Di
     # 2. Reglas temáticas institucionales (con cap estricto de 2 archivos por obligación)
     pendientes_tematica = []
     for ev in no_asignadas:
-        txt = f"{ev.nombre_original} {ev.titulo_evidencia or ''} {ev.metadatos_ligeros or ''}".lower()
+        obs_texto = getattr(ev, "observacion_usuario", "") or ev.titulo_evidencia or ""
+        txt = f"{ev.nombre_original} {obs_texto} {ev.metadatos_ligeros or ''}".lower()
         target = None
 
         if any(k in txt for k in ("das_hld", "das/", "hld", "diseño de software", "diseno de software", "entrega documento de diseño", "arquitectura")):
@@ -678,6 +679,7 @@ def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_ge
                 {
                     "archivo": ev.nombre_original,
                     "tipo": ev.tipo_archivo,
+                    "observacion_usuario": (getattr(ev, "observacion_usuario", "") or (ev.titulo_evidencia if not ev.titulo_evidencia.startswith("Soporte Técnico Obligación") else "")).strip(),
                     "resumen_tecnico": ev.resumen_para_prompt_ia(),
                 }
                 for ev in archivos_ob
@@ -742,6 +744,7 @@ REGLAS DE ORO Y NEGATIVE CONSTRAINTS ESTRICTAS (CALIDAD DE AUDITORÍA 5.0/5.0):
 3. EXTENSIÓN Y DENSIDAD: Para cada obligación, `texto_tabla_principal` DEBE contener mínimo 2 numerales técnicos exhaustivos ('1. Título Técnico: ... 2. Título Técnico: ...') con un total de 250 a 350 palabras por obligación, detallando componentes, patrones, metodologías y aseguramiento de calidad.
 4. INTEGRIDAD DE EVIDENCIAS: Debes generar exactamente un bloque en `bloques_evidencias` por cada archivo presente en `archivos_asignados` de cada obligación. PROHIBIDO mover archivos entre obligaciones o inventar nombres de archivo. Si una obligación no tiene archivos asignados, genera un `bloques_evidencias` con el soporte documental de gestión.
 5. SIN HTML: PROHIBIDO incluir etiquetas HTML/XML (<para>, </para>, <br>).
+6. OBSERVACIONES DEL CONTRATISTA EN EVIDENCIAS: Si un archivo incluye `observacion_usuario`, tómala como testimonio técnico verídico de primera mano. DEBES integrar obligatoriamente estas observaciones para fundamentar y enriquecer las actividades técnicas en `texto_tabla_principal`, `vinetas_desarrollo` y `bloques_evidencias`.
 
 RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 {{
