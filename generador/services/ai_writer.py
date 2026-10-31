@@ -365,6 +365,11 @@ def _inferir_contexto_clausula(
     }
 
 
+def _contraer_al(texto: str) -> str:
+    """Corrige la contracción castellana en frases ensambladas por plantillas."""
+    return re.sub(r"\ba el\b", "al", texto, flags=re.IGNORECASE)
+
+
 def _pulir_redaccion_local(texto: str) -> str:
     """Aplica correcciones gramaticales conservadoras."""
     if not texto:

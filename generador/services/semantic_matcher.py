@@ -1,6 +1,7 @@
 """Clasificación semántica local de evidencias y obligaciones."""
 
 import logging
+import os
 import re
 from functools import lru_cache
 from typing import Any, Optional
