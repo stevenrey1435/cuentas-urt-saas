@@ -400,7 +400,10 @@ def extraer_metadatos_ligeros_archivo(ruta_o_fileobj, nombre_archivo: str, ruta_
                         # Clasificación semántica de la captura
                         if any(k in txt_ocr_low for k in ("asistencia", "participantes", "resumen de la reunión", "reunión", "unirse", "teams", "salas para sesión", "convocatoria")):
                             metadatos["tag_semantico"] = "REUNION_SEGUIMIENTO"
-                        elif any(k in txt_ocr_low for k in ("merge requests", "hotfix", "commits", "commit", "gitlab", "branch", "repositorio")):
+                        elif any(k in txt_ocr_low for k in (
+                            "merge requests", "merge request", "hotfix", "commits", "commit",
+                            "gitlab", "branch", "repositorio", "feat(", "fix(",
+                        )):
                             metadatos["tag_semantico"] = "SOFTWARE_GIT"
                         elif any(k in txt_ocr_low for k in ("kanban", "closed", "in progress", "sprint", "tablero", "backlog", "to do")):
                             metadatos["tag_semantico"] = "TABLERO_AGIL"

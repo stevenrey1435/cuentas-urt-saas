@@ -8,7 +8,7 @@ import os
 import re
 import zipfile
 from datetime import date
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.core.cache import cache
 from django.contrib.auth.models import User
@@ -143,6 +143,23 @@ class AuditoriaCalidadRedaccionTests(TestCase):
         lineas_das = ["1. Documento de Arquitectura de Software (DAS"]
         res_c = _limpiar_fragmento_significativo(lineas_das, "DAS_HLD_T120.pdf")
         self.assertTrue(res_c.endswith("(DAS)"), f"No cerró el paréntesis truncado: {res_c}")
+
+    def test_02b_contextos_oti_no_contaminan_mesa_de_servicios_ni_git(self):
+        """Las obligaciones de soporte y repositorio conservan su alcance contractual literal."""
+        soporte = _inferir_contexto_clausula(
+            "Gestionar requerimientos, solicitudes e incidencias mediante mesa de servicios y correo electrónico, relacionados con fallos en los sistemas.",
+            9,
+            objeto_contrato="Servicios profesionales de desarrollo e integración de software.",
+        )
+        self.assertIn("Requerimientos", soporte["tema_corto"])
+        self.assertNotIn("Jurídicos", soporte["tema_corto"])
+
+        git = _inferir_contexto_clausula(
+            "Actualizar y documentar el código fuente en las ramas asignadas del repositorio git institucional y apoyar las mezclas.",
+            7,
+            objeto_contrato="Servicios profesionales de desarrollo e integración de software.",
+        )
+        self.assertIn("Versiones", git["tema_corto"])
 
     def test_03_perfiles_multiprofesion_abogado_social_catastral(self):
         """

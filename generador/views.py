@@ -15,6 +15,7 @@ import re
 from datetime import date
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, FileResponse, Http404
+from django.conf import settings
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.core.files import File
@@ -251,7 +252,11 @@ def detalle_informe(request, informe_id: int):
         id=informe_id,
         contratista=contratista_sesion,  # <-- Impide que un contratista vea o descargue el informe de otro por URL
     )
-    if informe.contratista.pases_disponibles <= 0 and informe.estado == "BORRADOR":
+    if (
+        informe.contratista.pases_disponibles <= 0
+        and informe.estado == "BORRADOR"
+        and not getattr(settings, "LOCAL_ONLY_AI", False)
+    ):
         messages.warning(
             request,
             "⚡ Este informe está listo para editar. Para generar tus documentos y paquete .ZIP, primero activa un Pase de Cobro en '⚡ Recargar Pases'.",
@@ -595,7 +600,6 @@ def generar_paquete_completo_view(request, informe_id: int):
         # La carga de embeddings puede consumir cientos de MB y descargar el modelo
         # durante la primera petición. En Render se mantiene desactivada salvo que
         # LOCAL_SEMANTIC_ENABLED=True se configure explícitamente.
-        from django.conf import settings
         if not getattr(settings, "LOCAL_SEMANTIC_ENABLED", False):
             from .services import semantic_matcher
             semantic_matcher._obtener_modelo.cache_clear()

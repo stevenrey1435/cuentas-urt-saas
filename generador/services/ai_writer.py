@@ -92,7 +92,8 @@ def clasificar_obligacion_por_afinidad(
         "teams", "convocatoria de reunión"
     ))
     es_desarrollo_git = any(t in txt for t in (
-        "tag_semantico': 'software_git'", "software_git", "merge request", "hotfix", "commit ", "commits", "gitlab", "branch"
+        "tag_semantico': 'software_git'", "software_git", "merge request", "hotfix", "commit ",
+        "commits", "gitlab", "branch", "feat(", "fix(",
     ))
     es_tablero_agil = any(t in txt for t in (
         "tag_semantico': 'tablero_agil'", "tablero_agil", "kanban", "closed", "in progress", "sprint"
@@ -121,6 +122,42 @@ def clasificar_obligacion_por_afinidad(
         ]
         if candidatos_reunion:
             candidatos = candidatos_reunion
+    elif es_desarrollo_git:
+        candidatos_git = [
+            d for d in detalles_lista
+            if any(k in (d.obligacion.descripcion_clausula or "").lower() for k in (
+                "repositorio", "git", "ramas", "código fuente", "codigo fuente", "mezclas",
+            ))
+        ]
+        if candidatos_git:
+            candidatos = candidatos_git
+    elif es_cronograma:
+        candidatos_cronograma = [
+            d for d in detalles_lista
+            if any(k in (d.obligacion.descripcion_clausula or "").lower() for k in (
+                "cronograma", "estimar esfuerzos", "actividades planificadas", "compilar informes",
+            ))
+        ]
+        if candidatos_cronograma:
+            candidatos = candidatos_cronograma
+    elif es_permisos:
+        candidatos_permisos = [
+            d for d in detalles_lista
+            if any(k in (d.obligacion.descripcion_clausula or "").lower() for k in (
+                "mesa de servicios", "correo electrónico", "solicitudes", "incidencias",
+            ))
+        ]
+        if candidatos_permisos:
+            candidatos = candidatos_permisos
+    elif es_seguridad:
+        candidatos_seguridad = [
+            d for d in detalles_lista
+            if any(k in (d.obligacion.descripcion_clausula or "").lower() for k in (
+                "parametrización", "fortalecimiento", "seguridad",
+            ))
+        ]
+        if candidatos_seguridad:
+            candidatos = candidatos_seguridad
 
     # Mapa de familias semánticas -> palabras clave de cláusulas contractuales
     familias_semanticas = [
@@ -174,7 +211,7 @@ def clasificar_obligacion_por_afinidad(
             ("jurídic", "legal", "judicial", "fallo", "sentencia", "concepto", "defensa", "tutela", "procesal", "normativ", "sustanciación"),
         ),
         (
-            ("predio", "catastro", "plano", "georreferenciacion", "ortofoto", "coordenadas", "lindero", "poligono", "shx", "shp", "sig", "cartografia", "topograf", "geodatabase", "inspeccion ocular"),
+            ("predio", "catastro", "plano", "georreferenciacion", "ortofoto", "coordenadas", "lindero", "poligono", "shx", "shp", "cartografia", "topograf", "geodatabase", "inspeccion ocular"),
             ("predio", "catastral", "topográfic", "cartograf", "georreferenc", "geográfica", "inspección", "lindero", "espacial"),
         ),
         (
@@ -637,6 +674,34 @@ def _hechos_evidencia(meta: dict, nombre_archivo: str) -> str:
     return " ".join(hechos)[:520] or f"Archivo soporte: {nombre_archivo}"
 
 
+def _evidencia_tiene_contenido_verificable(meta: dict) -> bool:
+    """Indica si el inspector obtuvo contenido suficiente para describir hechos observables."""
+    for clave in ("texto_pdf", "texto_ocr"):
+        if len((meta.get(clave) or "").strip()) >= 24:
+            return True
+    lineas = [
+        str(linea).strip()
+        for linea in (meta.get("resumen_lineas") or [])
+        if len(str(linea).strip()) >= 24
+    ]
+    return bool(lineas)
+
+
+def _fechas_observadas(meta: dict) -> List[str]:
+    """Extrae fechas completas del soporte sin interpretar fechas incompletas."""
+    texto = " ".join(
+        str(meta.get(clave) or "")
+        for clave in ("texto_pdf", "texto_ocr", "resumen_lineas")
+    )
+    coincidencias = re.findall(
+        r"\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+de\s+[a-záéíóú]+(?:\s+de)?\s+\d{4}|"
+        r"[a-záéíóú]+\s+\d{1,2},?\s+\d{4})\b",
+        texto,
+        flags=re.IGNORECASE,
+    )
+    return list(dict.fromkeys(coincidencias[:8]))
+
+
 def _inferir_contexto_clausula(
     clausula: str,
     num_ob: int,
@@ -667,7 +732,7 @@ def _inferir_contexto_clausula(
     # Inferencia de Tipo de Profesión / Disciplina
     if any(k in ctx_global for k in ("software", "sistemas de información", "código fuente", "git", "base de datos", "arquitectura", "desarrollo")):
         tipo_profesion = "gestión tecnológica y de sistemas"
-    elif any(k in ctx_global for k in ("demanda", "fallo", "tutela", "juzgado", "tribunal", "auto", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
+    elif any(k in ctx_global for k in ("demanda", "tutela", "juzgado", "tribunal", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
         tipo_profesion = "gestión jurídica y legal"
     elif any(k in low for k in ("predio", "catastro", "catastral", "plano", "georreferenc", "ortofoto", "coordenadas", "lindero", "polígono", "poligono", "cartograf", "topográf", "geodatabase", "inspección ocular", "inspeccion ocular", "espacial")):
         tipo_profesion = "gestión técnico-predial y catastral"
@@ -694,9 +759,19 @@ def _inferir_contexto_clausula(
     elif any(k in low for k in ("cronograma", "estimar esfuerzos", "actividades planificadas", "compilar informes", "plan de acción")):
         tema = "Planeación Técnica, Estimación de Esfuerzo y Seguimiento de Cronogramas de Trabajo"
         accion = "el control de hitos, monitoreo de capacidad técnica y consolidación de informes de avance"
+    elif any(k in low for k in (
+        "mesa de servicios", "correo electrónico", "correo electronico",
+        "requerimientos, solicitudes e incidencias", "solicitudes e incidencias",
+    )):
+        tema = "Gestión de Requerimientos, Solicitudes e Incidencias Operativas"
+        accion = "el diagnóstico técnico, atención oportuna de solicitudes de servicio y resolución efectiva de anomalías"
 
     # 1. Clasificación específica del área
-    elif any(k in low for k in ("demanda", "fallo", "tutela", "juzgado", "tribunal", "auto", "recurso", "apelación", "apelacion", "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa", "procesal", "normativ", "sustanciación", "sustanciacion")):
+    elif any(k in low for k in (
+        "demanda", "tutela", "juzgado", "tribunal", "recurso", "apelación", "apelacion",
+        "jurídic", "juridic", "legal", "judicial", "sentencia", "concepto", "defensa",
+        "procesal", "normativ", "sustanciación", "sustanciacion",
+    )):
         # Rama Jurídica / Legal
         tema = "Defensa Judicial, Sustanciación Procesal y Atención de Acciones Constitucionales"
         accion = "la oportuna defensa judicial, sustanciación técnica de memoriales y atención estricta de términos procesales"
@@ -711,7 +786,7 @@ def _inferir_contexto_clausula(
     elif any(k in low for k in ("topograf", "levantamiento", "lindero", "coordenadas", "inspección ocular", "plano")):
         tema = "Levantamiento Topográfico, Validación de Linderos e Inspección Predial"
         accion = "la determinación física exacta de linderos, verificación espacial y consistencia de la información predial"
-    elif any(k in low for k in ("georreferenc", "cartograf", "geodatabase", "sig", "análisis espacial", "ortofoto")):
+    elif any(k in low for k in ("georreferenc", "cartograf", "geodatabase", "análisis espacial", "ortofoto")) or re.search(r"\bsig\b", low):
         tema = "Análisis Geográfico, Estructuración de Geodatabases y Cartografía Digital"
         accion = "la consolidación de capas espaciales, consistencia geográfica y confiabilidad de los datos catastrales"
 
@@ -864,9 +939,34 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
             extracto_limpio = _limpiar_fragmento_significativo(lineas_ev, ev.nombre_original, nombre_contratista=nom_contratista)
             hechos_ev = _hechos_evidencia(meta_ev, ev.nombre_original)
             sub_ref = f" — {extracto_limpio}" if extracto_limpio else ""
-            ctx_extra = (
-                f" (evidencia '{ev.nombre_original}'; contenido observado: {hechos_ev})"
-            )
+            fechas_ev = _fechas_observadas(meta_ev)
+            advertencia_fecha = ""
+            if fechas_ev:
+                texto_fechas = " ".join(fechas_ev).lower()
+                if str(anio) in texto_fechas and not any(
+                    marcador in texto_fechas
+                    for marcador in (
+                        f"/{informe.mes:02d}/",
+                        f"-{informe.mes:02d}-",
+                        f" de {mes_minus} ",
+                        f" {mes_minus} ",
+                    )
+                ):
+                    advertencia_fecha = (
+                        f" ADVERTENCIA DE COHERENCIA TEMPORAL: el soporte contiene la fecha "
+                        f"'{fechas_ev[0]}', que debe ser revisada frente al periodo del informe."
+                    )
+            if _evidencia_tiene_contenido_verificable(meta_ev):
+                ctx_extra = (
+                    f" (evidencia '{ev.nombre_original}'; contenido observado: {hechos_ev}."
+                    f"{advertencia_fecha})"
+                )
+            else:
+                ctx_extra = (
+                    f" (evidencia '{ev.nombre_original}'; no fue posible extraer contenido textual "
+                    f"verificable de este soporte. La descripción se limita a su incorporación documental."
+                    f"{advertencia_fecha})"
+                )
 
             if tag_ev == "SOFTWARE_GIT" or ev.tipo_archivo == "CODIGO":
                 titulo_pto = f"Desarrollo de Software, Versionamiento y Control de Cambios{sub_ref}"
@@ -933,17 +1033,25 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                     f"{detalle_excel}, asegurando la consistencia de los registros, cruces de validación e insumo analítico para {proyecto}."
                 )
             else:
-                # Rotar entre las 5 plantillas léxicas variadas usando el texto real extraído por OCR/PDF/Word
-                plantilla_tit, plantilla_desc = variantes_verbos_soporte[(idx_ev - 1) % len(variantes_verbos_soporte)]
-                titulo_pto = f"{plantilla_tit}{sub_ref}"
-                desc_pto = plantilla_desc.format(
-                    accion_cierre=ctx_clausula["accion_cierre"],
-                    proyecto=proyecto,
-                    oficina_area=oficina_area,
-                    mes=mes_minus,
-                    anio=anio,
-                    contexto_extra=ctx_extra,
-                )
+                if not _evidencia_tiene_contenido_verificable(meta_ev):
+                    titulo_pto = f"Soporte documental incorporado{sub_ref}"
+                    desc_pto = (
+                        f"Se incorporó al expediente el archivo '{ev.nombre_original}' como soporte de la "
+                        f"Obligación Contractual N° {k}. No se formula una conclusión técnica adicional porque "
+                        f"el contenido del archivo no pudo ser leído o validado automáticamente{ctx_extra}."
+                    )
+                else:
+                    # Rotar entre las 5 plantillas léxicas variadas usando el texto real extraído por OCR/PDF/Word
+                    plantilla_tit, plantilla_desc = variantes_verbos_soporte[(idx_ev - 1) % len(variantes_verbos_soporte)]
+                    titulo_pto = f"{plantilla_tit}{sub_ref}"
+                    desc_pto = plantilla_desc.format(
+                        accion_cierre=ctx_clausula["accion_cierre"],
+                        proyecto=proyecto,
+                        oficina_area=oficina_area,
+                        mes=mes_minus,
+                        anio=anio,
+                        contexto_extra=ctx_extra,
+                    )
 
             desc_pto = _pulir_redaccion_local(desc_pto)
             items_numerados.append(f"{idx_ev}. {titulo_pto}: {desc_pto}")
@@ -1143,8 +1251,10 @@ def redactar_informe_con_ia(
     if not contratista.activo_mes_actual:
         raise PermissionError("El contratista no se encuentra activo para generar informes en el mes actual.")
 
+    modo_local = getattr(settings, "LOCAL_ONLY_AI", False)
+
     if obligacion_especifica_id is not None:
-        if contratista.creditos_regeneracion_individual <= 0:
+        if contratista.creditos_regeneracion_individual <= 0 and not modo_local:
             raise PermissionError(
                 "Ha alcanzado el límite mensual de créditos de regeneración individual (6/mes)."
             )
@@ -1154,7 +1264,7 @@ def redactar_informe_con_ia(
             .filter(obligacion_id=obligacion_especifica_id)
         )
     else:
-        if contratista.creditos_informe_completo <= 0:
+        if contratista.creditos_informe_completo <= 0 and not modo_local:
             raise PermissionError(
                 "Ha alcanzado el límite mensual de créditos de generación de informe completo (3/mes)."
             )
@@ -1301,9 +1411,9 @@ def redactar_informe_con_ia(
     # Descontar crédito correspondiente:
     # - Si usó el botón pequeño de una sola obligación: descuenta de regeneración individual
     # - Si usó el botón principal de redactar el informe: descuenta 1 Pase de Cuenta de Cobro
-    if obligacion_especifica_id is not None:
+    if obligacion_especifica_id is not None and not modo_local:
         contratista.creditos_regeneracion_individual = max(0, contratista.creditos_regeneracion_individual - 1)
-    else:
+    elif obligacion_especifica_id is None and not modo_local:
         contratista.creditos_informe_completo = max(0, contratista.creditos_informe_completo - 1)
     contratista.save()
 
