@@ -608,7 +608,10 @@ def _extraer_json_limpio(texto_respuesta: str) -> dict:
 def _llamar_ollama_local_directo(prompt: str) -> Optional[dict]:
     """Llamada directa optimizada a tu HP OMEN 14 via Cloudflare Tunnel sin bloqueos."""
     base_url = getattr(settings, "HERMES_BASE_URL", "").strip()
+    print(f"\n[AI_WRITER] >>> HERMES_BASE_URL detectada en settings: '{base_url}' <<<", flush=True)
+
     if not base_url:
+        print("[AI_WRITER] >>> ERROR: HERMES_BASE_URL está VACÍA. Saltando Ollama... <<<", flush=True)
         return None
 
     try:
@@ -619,7 +622,7 @@ def _llamar_ollama_local_directo(prompt: str) -> Optional[dict]:
             url_limpia += "/v1"
 
         modelo = getattr(settings, "HERMES_MODEL", "qwen2.5:7b-instruct")
-        logger.warning("Enviando petición a tu OMEN 14 en: %s con modelo %s", url_limpia, modelo)
+        print(f"[AI_WRITER] >>> CONECTANDO A OMEN 14: URL={url_limpia} | MODELO={modelo} <<<", flush=True)
 
         client = OpenAI(
             base_url=url_limpia,
@@ -634,7 +637,7 @@ def _llamar_ollama_local_directo(prompt: str) -> Optional[dict]:
             messages=[
                 {
                     "role": "system",
-                    "content": "Eres un redactor técnico experto en contratación pública. Responde ÚNICAMENTE en JSON válido sin texto adicional.",
+                    "content": "Eres un redactor técnico experto en contratación pública. Responde ÚNICAMENTE en JSON válido con la clave 'obligaciones'.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -643,17 +646,18 @@ def _llamar_ollama_local_directo(prompt: str) -> Optional[dict]:
         )
 
         contenido = resp.choices[0].message.content
+        print(f"[AI_WRITER] >>> ¡RESPUESTA RECIBIDA DE OLLAMA! Longitud: {len(contenido)} caracteres <<<", flush=True)
+
         datos = _extraer_json_limpio(contenido)
         if datos and "obligaciones" in datos:
-            logger.warning("¡Respuesta exitosa recibida de tu OMEN 14!")
+            print("[AI_WRITER] >>> JSON VÁLIDO CON CLAVE 'obligaciones'. Éxito total. <<<", flush=True)
             return datos
         else:
-            logger.error("Ollama respondió pero el JSON no contiene 'obligaciones'.")
+            print(f"[AI_WRITER] >>> ERROR: JSON recibido no tiene clave 'obligaciones'. Contenido: {contenido[:200]} <<<", flush=True)
             return None
     except Exception as exc:
-        logger.error("Fallo al conectar con Ollama en tu OMEN (%s).", exc)
+        print(f"[AI_WRITER] >>> EXCEPCIÓN AL CONECTAR CON TU OMEN: {type(exc).__name__} -> {exc} <<<", flush=True)
         return None
-
 
 def _llamar_gemini_fallback(prompt: str) -> Optional[dict]:
     api_key = getattr(settings, "GEMINI_API_KEY", "")
@@ -715,6 +719,7 @@ def redactar_informe_con_ia(
     apuntes_generales_mes: str = "",
     ignorar_cache: bool = True,
 ) -> Dict[str, Any]:
+    print(f"\n[AI_WRITER] >>> INICIANDO REDACCIÓN DEL INFORME (forzar_demo={forzar_demo}, LOCAL_ONLY_AI={getattr(settings, 'LOCAL_ONLY_AI', False)}) <<<", flush=True)
     contratista = informe.contratista
 
     if not contratista.activo_mes_actual:
