@@ -841,15 +841,23 @@ def _llamar_hermes_agent_fifo(prompt: str) -> Optional[dict]:
                 logger.info("Hermes OAuth Codex directo no retornó JSON (%s).", exc)
 
         # B. Modo Servidor HTTP Compatible con OpenAI / Ollama Local
-        base_url = getattr(settings, "HERMES_BASE_URL", "")
+        base_url = getattr(settings, "HERMES_BASE_URL", "").strip()
         if base_url:
             try:
                 from openai import OpenAI
 
+                url_endpoint = base_url.rstrip("/")
+                if not url_endpoint.endswith("/v1"):
+                    url_endpoint = f"{url_endpoint}/v1"
+
                 client = OpenAI(
-                    base_url=base_url,
+                    base_url=url_endpoint,
                     api_key=getattr(settings, "HERMES_API_KEY", "ollama-local"),
-                    timeout=90.0,
+                    default_headers={
+                        "ngrok-skip-browser-warning": "true",
+                        "User-Agent": "CuentasURT/1.0",
+                    },
+                    timeout=120.0,
                     max_retries=1,
                 )
                 resp = client.chat.completions.create(
