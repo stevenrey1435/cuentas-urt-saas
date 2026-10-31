@@ -1,11 +1,6 @@
 """
 Conector IA Dual con Ahorro Extremo de Tokens (Single-Shot JSON) y Cola Secuencial FIFO.
-
-Arquitectura de Redacción Coherente en UNA SOLA LLAMADA:
-- Primaria: Hermes Agent (`openai-codex` OAuth / endpoint local compatible con OpenAI) en cola secuencial FIFO (1 informe a la vez).
-- Respaldo 1 (Fallback Automático): Google Gemini API (`gemini-2.5-flash` via SDK `google-genai`) si `GEMINI_API_KEY` está configurada.
-- Respaldo 2 (Fallback Automático): OpenAI API (`gpt-4o-mini` via SDK `openai`) si `OPENAI_API_KEY` está configurada.
-- Respaldo 3 (Modo Offline Inteligente): Motor determinista estructurado de alta precisión técnica para contratación pública.
+Integración directa con Ollama Local (HP OMEN 14 RTX 4070) via Cloudflare Tunnel.
 """
 
 import os
@@ -21,33 +16,10 @@ from .semantic_matcher import puntuar_obligaciones_semanticamente
 
 logger = logging.getLogger(__name__)
 
-# Cola secuencial (Semáforo FIFO = 1 informe a la vez) para proteger la cuenta OAuth de Hermes Agent
 _HERMES_FIFO_LOCK = threading.Lock()
 
 
-FEW_SHOT_STYLE_REFERENCE = """
-ESTÁNDAR DE EXTENSIÓN, PROFUNDIDAD Y RIGOR TÉCNICO EN CONTRATACIÓN PÚBLICA:
-CRITERIO DE CALIDAD: La supervisión técnica y las auditorías de contratación pública exigen redacciones EXTENSAS, EXHAUSTIVAS, PROFUNDAS Y DENSAS. Está TERMINANTEMENTE PROHIBIDO generar resúmenes cortos, viñetas de una sola línea, textos superficiales o mensajes de error de lectura. Cada texto debe transmitir solvencia y rigor profesional.
-
-1. En `texto_tabla_principal` (para la columna 'Actividades Desarrolladas' del formato oficial GC-FO-15):
-   - Estructura obligatoria (extensión objetivo: 250 a 450 palabras por obligación):
-     * Párrafo introductorio formal: Contextualización del periodo reportado, vinculación al proyecto o área, marco institucional y directrices de supervisión.
-     * Numerales técnicos detallados ('1. Título Técnico: ...', '2. Título Técnico: ...'): Cada numeral debe ser un bloque denso de 4 a 7 líneas que detalle componentes intervenidos, metodologías aplicadas, patrones de trabajo, validaciones o actas de sesión técnica.
-     * Párrafo de impacto o cierre técnico: Certificación de la estabilidad operativa, trazabilidad transaccional, calidad del trabajo y aseguramiento de directrices institucionales y contractuales.
-   - PROHIBIDO incluir etiquetas como `<para>`, `</para>`, `<br>`, correos electrónicos personales o corchetes angulares `<` `>` sin escapar.
-
-2. En `desarrollo_detallado_oti` (para `REPORTE DE OBLIGACIONES CONTRACTUALES.docx` de cada `Actividad_K`):
-   - `parrafos_introductorios`: Mínimo 2 párrafos formales extensos y bien articulados.
-   - `vinetas_desarrollo`: Mínimo 2 a 4 viñetas técnicas sustanciosas (`{"titulo": "Título Técnico", "descripcion": "Explicación exhaustiva de 5 a 8 líneas..."}`).
-   - `resultados_entregables`: 2 a 4 productos o entregables verificables.
-
-3. En `bloques_evidencias` (para `Actividad_<K>/Anexos/Obligacion <K>.docx`):
-   - Lista numerada de evidencias donde cada bloque debe tener una descripción técnica profunda de 4 a 6 líneas explicando qué demuestra la captura o documento y su impacto comprobable en el proyecto.
-"""
-
-
 def _normalizar_espacios(texto: str) -> str:
-    """Colapsa saltos de línea y espacios múltiples para que los match de frases no fallen por saltos de línea."""
     return re.sub(r"\s+", " ", (texto or "")).strip()
 
 
@@ -57,117 +29,53 @@ def clasificar_obligacion_por_afinidad(
     indice_rotacion: int = 0,
 ):
     """
-    Analiza el nombre del archivo, su ruta dentro del .zip y sus metadatos ligeros y determina
-    en cuál de las N obligaciones del contratista encaja mejor según el texto de cada cláusula.
-    Garantiza además que los soportes genéricos (capturas PNG) cubran primero las obligaciones vacías.
+    Distribución estricta y balanceada para que todas las obligaciones
+    contractuales reciban soporte y ninguna acapare más de 2 archivos.
     """
     if not detalles_lista:
         return None
 
+    mapa_obs = {det.obligacion.numero_obligacion: det for det in detalles_lista}
     txt = _normalizar_espacios(texto_item).lower()
 
-    # 1. Mención explícita en el nombre o carpeta ("obligacion K", "obK", "act_K", "actividad K")
-    m_exp = re.search(r"(?:obligaci[oó]n|ob|actividad|act)[\s_\-]*(\d{1,2})\b", txt)
-    if m_exp:
-        num_buscado = int(m_exp.group(1))
-        for det in detalles_lista:
-            if det.obligacion.numero_obligacion == num_buscado:
-                return det
+    # 1. Mapeo estricto por nombres y palabras clave inequívocas
+    if any(k in txt for k in ("das_hld", "diseño de software", "diseno de software", "entrega documento de diseño")):
+        if 1 in mapa_obs:
+            return mapa_obs[1]
 
-    puntajes_semanticos = puntuar_obligaciones_semanticamente(texto_item, detalles_lista)
+    if any(k in txt for k in ("seguridad y control", "it-sigaf", "control_de_evidencias")):
+        if 3 in mapa_obs:
+            return mapa_obs[3]
 
-    # 2. Detección de familias de archivos específicos
-    es_reunion = any(t in txt for t in (
-        "reunion_seguimiento", "asistencia", "participantes", "resumen de la reunión",
-        "resumen de la reunion", "unirse a la reunión", "teams", "convocatoria", "mesa técnica"
-    ))
-    es_desarrollo_git = any(t in txt for t in (
-        "software_git", "merge request", "hotfix", "commit ", "commits", "gitlab", "branch", "feat(", "fix("
-    ))
-    es_tablero_agil = any(t in txt for t in (
-        "tablero_agil", "kanban", "in progress", "sprint", "jira", "azure boards", "planner"
-    ))
-    es_cronograma = any(t in txt for t in (
-        "cronograma_planeacion", "cronograma", "gantt", "plan de trabajo", "plant120", "alcance2", "alcance"
-    ))
-    es_arquitectura = any(t in txt for t in (
-        "arquitectura_diseno", "das_hld", "das/", "hld", "arquitectura de software",
-        "diseño de alto nivel", "diseño de software", "diseno de software"
-    ))
-    es_seguridad = any(t in txt for t in (
-        "seguridad_inmutabilidad", "sha-256", "control de evidencias", "inmutabilidad",
-        "seguridad_datos", "it-sigaf", "seguridad y control"
-    ))
-    es_permisos = any(t in txt for t in (
-        "permisos_sistemas", "permisos de administrador", "cooperapp", "solicitud de asignación de permisos",
-        "asignación de permisos", "mesa de servicios"
-    ))
+    if any(k in txt for k in ("cronograma_sigaf", "plant120", "cronograma", "gantt")):
+        if 6 in mapa_obs:
+            return mapa_obs[6]
 
-    # Mapeo directo por tipo de documento inequívoco
-    for det in detalles_lista:
-        clausula_norm = _normalizar_espacios(det.obligacion.descripcion_clausula).lower()
-        if es_arquitectura and any(k in clausula_norm for k in ("arquitectura", "desarrollar e integrar")):
-            return det
-        if es_cronograma and any(k in clausula_norm for k in ("cronograma", "estimar esfuerzos", "actividades planificadas")):
-            return det
-        if es_permisos and any(k in clausula_norm for k in ("mesa de servicios", "correo electrónico", "requerimientos", "solicitudes")):
-            return det
-        if es_seguridad and any(k in clausula_norm for k in ("parametrización", "fortalecimiento técnico", "implementación")):
-            return det
-        if es_desarrollo_git and any(k in clausula_norm for k in ("repositorio git", "ramas asignadas", "código fuente")):
-            return det
-        if es_tablero_agil and any(k in clausula_norm for k in ("herramienta de seguimiento", "seguimientos programados")):
-            return det
-        if es_reunion and any(k in clausula_norm for k in ("asistir a reuniones", "modalidad virtual o presencial")):
-            return det
+    if any(k in txt for k in ("cooperapp", "solicitud de asignación de permisos", "permisos de administrador")):
+        if 9 in mapa_obs:
+            return mapa_obs[9]
 
-    # 3. Puntuación léxica + semántica para documentos con texto
-    stopwords_genericas = {
-        "para", "como", "este", "esta", "documento", "archivo", "soporte", "evidencia",
-        "sistema", "entrega", "informe", "gestion", "actividad", "captura", "pantalla", "imagen"
-    }
-    palabras_item = set(re.findall(r"[a-záéíóúñ]{4,}", txt)) - stopwords_genericas
+    # 2. Distribución circular equilibrada para capturas e imágenes genéricas
+    # Asegura cubrir obligaciones clave: 2 (Mantenimiento), 4 (Soporte), 5 (Socialización),
+    # 7 (Git), 8 (Seguimiento), 10 (Reuniones), 11 (Otras)
+    conteo_actual = {det.id: det.archivos_evidencia.count() for det in detalles_lista}
 
-    mejor_det = None
-    mejor_puntaje = 0.0
+    orden_preferente = [7, 8, 5, 2, 4, 10, 11, 7, 8, 5, 2, 4, 10, 11]
+    ob_candidata = orden_preferente[indice_rotacion % len(orden_preferente)]
 
-    for det in detalles_lista:
-        clausula_low = _normalizar_espacios(det.obligacion.descripcion_clausula).lower()
-        palabras_clausula = set(re.findall(r"[a-záéíóúñ]{4,}", clausula_low)) - stopwords_genericas
-        comunes = palabras_item.intersection(palabras_clausula)
-        puntaje = len(comunes) * 4.0
+    if ob_candidata in mapa_obs and conteo_actual.get(mapa_obs[ob_candidata].id, 0) < 2:
+        return mapa_obs[ob_candidata]
 
-        similitud = (puntajes_semanticos or {}).get(det.obligacion.numero_obligacion, 0.0)
-        if similitud > 0.18:
-            puntaje += similitud * 10.0
-
-        if puntaje > 0:
-            puntaje_ajustado = puntaje - (det.archivos_evidencia.count() * 1.5)
-            if puntaje_ajustado > mejor_puntaje:
-                mejor_puntaje = puntaje_ajustado
-                mejor_det = det
-
-    if mejor_det is not None and mejor_puntaje > 2.0:
-        return mejor_det
-
-    # 4. Distribución equitativa inteligente para capturas genéricas (`Captura de pantalla...`, `imagen (N).png`)
-    # Prioriza obligaciones que aún tienen 0 evidencias para que ninguna obligación quede huérfana en el PDF
+    # Si la preferida ya tiene cupo lleno, asignar a la que tenga menor cantidad de archivos
     detalles_ordenados = sorted(
         detalles_lista,
-        key=lambda d: (d.archivos_evidencia.count(), d.obligacion.numero_obligacion),
+        key=lambda d: (conteo_actual.get(d.id, 0), d.obligacion.numero_obligacion),
     )
     return detalles_ordenados[0]
 
 
 def _limpiar_fragmento_significativo(lineas: List[str], nombre_archivo: str, nombre_contratista: str = "") -> str:
-    """
-    Extrae un subtítulo limpio y profesional a partir del nombre del archivo o sus primeras líneas,
-    eliminando nombres propios del contratista, etiquetas de Outlook ('RE_', 'Outlo'), puntos suspensivos
-    de tablas de contenido y metadatos crudos.
-    """
     base = os.path.splitext(nombre_archivo)[0]
-
-    # Limpiar dinámicamente el nombre del contratista y variantes sin tilde
     variantes_nombre = []
     if nombre_contratista:
         partes = [p for p in re.split(r"\s+", nombre_contratista.strip()) if len(p) > 2]
@@ -175,7 +83,6 @@ def _limpiar_fragmento_significativo(lineas: List[str], nombre_archivo: str, nom
             variantes_nombre.append(r"[\s_\-]*" + r"[\s_\-]+".join(partes[:2]) + r".*$")
     variantes_nombre.append(r"[\s_\-]*jes[uú]s[\s_\-]+steven[\s_\-]+rey.*$")
 
-    # 1. Correos exportados de Outlook
     if re.search(r"(^re[\s_]|^rv[\s_]|^fw[\s_]|outlook|outlo)", base.lower()):
         asunto = re.sub(r"^(re|rv|fw|fwd)[\s_:\-]+", "", base, flags=re.I)
         for pat in variantes_nombre:
@@ -185,14 +92,12 @@ def _limpiar_fragmento_significativo(lineas: List[str], nombre_archivo: str, nom
         if len(asunto) > 8:
             return sanitizar_texto_para_reporte(asunto[:90])
 
-    # 2. Cronogramas y Planes de Trabajo
     if any(k in base.lower() for k in ("cronograma", "plant120", "plan_trabajo", "gantt")):
         nom_cron = re.sub(r"(\d{1,2})(octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre)(\d{4})", r" \1 de \2 de \3", base, flags=re.I)
         nom_cron = re.sub(r"[_\-]+", " ", nom_cron)
         nom_cron = re.sub(r"\s+", " ", nom_cron).strip(" -–—.,;:")
         return sanitizar_texto_para_reporte(nom_cron[:90])
 
-    # 3. Documentos técnicos con nombre descriptivo (ej. DAS_HLD_T120_URT, IT-SIGAF_Seguridad...)
     if not re.match(r"^(imagen|image|captura|screenshot|img|paste|foto|whatsapp)", base.lower()):
         base_limpia = base
         for pat in variantes_nombre:
@@ -206,10 +111,6 @@ def _limpiar_fragmento_significativo(lineas: List[str], nombre_archivo: str, nom
 
 
 def _resumir_contenido_observado_limpio(meta: dict, nombre_archivo: str) -> str:
-    """
-    Sintetiza de forma limpia y ejecutiva el contenido del archivo SIN volcar correos electrónicos
-    personales (Ley 1581 de 2012), ni puntos de tabla de contenido ('.....'), ni filas crudas de MS Project.
-    """
     base_low = nombre_archivo.lower()
     if "das_hld" in base_low or "arquitectura" in base_low:
         return (
@@ -242,7 +143,6 @@ def _resumir_contenido_observado_limpio(meta: dict, nombre_archivo: str) -> str:
             "para el Sistema de Seguimiento T-120 ante el equipo técnico y funcional"
         )
 
-    # Limpieza general para cualquier otro PDF/Word/Excel futuro
     lineas = list(meta.get("resumen_lineas") or [])
     for clave in ("texto_pdf", "texto_ocr"):
         val = (meta.get(clave) or "").strip()
@@ -252,13 +152,9 @@ def _resumir_contenido_observado_limpio(meta: dict, nombre_archivo: str) -> str:
     fragmentos_limpios = []
     for ln in lineas:
         s = str(ln)
-        # Eliminar correos electrónicos <...> y direcciones @
         s = re.sub(r"[‹<]?[\w\.\-]+@[\w\.\-]+\.\w+[›>]?", "", s)
-        # Eliminar secuencias de puntos de índice (.....)
         s = re.sub(r"\.{3,}", " ", s)
-        # Eliminar caracteres privados de fuentes de íconos (Unicode Private Use Area)
         s = re.sub(r"[\ue000-\uf8ff]", "", s)
-        # Eliminar cabeceras crudas de correo o MS Project
         if any(r in s.lower() for r in (
             "enviado:", "para:", "cc:", "asunto:", "cordial saludo",
             "nombre de tarea duración", "predecesoras", "página 1 de", "página 2 de"
@@ -280,10 +176,6 @@ def _inferir_contexto_clausula(
     num_ob: int,
     objeto_contrato: str = "",
 ) -> Dict[str, str]:
-    """
-    Analiza la cláusula contractual (normalizando primero los saltos de línea) para determinar con
-    exactitud milimétrica el título temático, tipo de profesión y conclusión técnica.
-    """
     txt = _normalizar_espacios(clausula)
     low = txt.lower()
     ctx_global = f"{low} {_normalizar_espacios(objeto_contrato).lower()}"
@@ -298,22 +190,14 @@ def _inferir_contexto_clausula(
             "accion_cierre": "el cumplimiento de los compromisos asignados en el periodo",
         }
 
-    # 1. Inferencia de Tipo de Profesión
     if any(k in ctx_global for k in (
         "software", "sistemas de información", "código fuente", "git",
         "base de datos", "arquitectura", "tecnologías de la información"
     )):
         tipo_profesion = "ingeniería de software y gestión tecnológica"
-    elif any(k in low for k in ("demanda", "tutela", "juzgado", "tribunal", "sentencia", "sustanciación")):
-        tipo_profesion = "gestión jurídica y procesal"
-    elif any(k in low for k in ("predio", "catastro", "catastral", "georreferenc", "topográf", "lindero")):
-        tipo_profesion = "gestión técnico-predial y catastral"
-    elif any(k in low for k in ("víctima", "comunidad", "psicosocial", "enfoque diferencial")):
-        tipo_profesion = "intervención social y comunitaria"
     else:
         tipo_profesion = "gestión profesional y técnica"
 
-    # 2. Clasificación exacta de la Cláusula (usando texto sin saltos de línea)
     if any(k in low for k in ("desarrollar e integrar", "arquitectura y las etapas del ciclo de vida", "escalabilidad y mantenibilidad")):
         tema = "Desarrollo, Arquitectura de Componentes e Integración de Sistemas de Información"
         accion = "el diseño modular, estructuración arquitectónica confiable e interoperabilidad de los componentes de software institucionales"
@@ -347,10 +231,6 @@ def _inferir_contexto_clausula(
     elif any(k in low for k in ("demás actividades", "demas actividades", "encomendadas", "garantizar el cumplimiento")):
         tema = "Actividades Transversales de Apoyo Técnico y Cumplimiento Integral del Contrato"
         accion = "el apoyo técnico transversal a las iniciativas de la Oficina de Tecnologías de la Información y el aseguramiento integral de las obligaciones contractuales"
-    # Ramas multidisciplinares para otros contratos (solo si NO es contrato de software)
-    elif any(k in low for k in ("defensa judicial", "tutela", "juzgado", "tribunal", "demanda", "procesal")):
-        tema = "Defensa Judicial, Sustanciación Procesal y Atención de Acciones Constitucionales"
-        accion = "la oportuna defensa judicial, sustanciación técnica de memoriales y atención estricta de términos procesales"
     else:
         limpia = re.sub(r"^(desarrollar|realizar|ejecutar|apoyar|gestionar|garantizar|brindar|adelantar|participar)\s+", "", txt, flags=re.I)
         tema = limpia[:85].rstrip(".,;:")
@@ -365,13 +245,7 @@ def _inferir_contexto_clausula(
     }
 
 
-def _contraer_al(texto: str) -> str:
-    """Corrige la contracción castellana en frases ensambladas por plantillas."""
-    return re.sub(r"\ba el\b", "al", texto, flags=re.IGNORECASE)
-
-
 def _pulir_redaccion_local(texto: str) -> str:
-    """Aplica correcciones gramaticales conservadoras."""
     if not texto:
         return ""
     texto = re.sub(r"\ba el\b", "al", texto, flags=re.IGNORECASE)
@@ -382,11 +256,6 @@ def _pulir_redaccion_local(texto: str) -> str:
 
 
 def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> dict:
-    """
-    Motor Redactor Experto Local 0-Tokens:
-    Produce redacciones extensas, formales y 100% alineadas con cada cláusula contractual y sus
-    soportes físicos, sin mensajes robóticos de fallo de lectura ni volcados de correo crudos.
-    """
     resultado = {"obligaciones": {}}
     mes_minus = informe.nombre_mes.lower()
     anio = informe.anio
@@ -421,11 +290,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
         clausula = _normalizar_espacios(det.obligacion.descripcion_clausula)
         apuntes = (det.apuntes_contratista or "").strip()
         evidencias = list(det.archivos_evidencia.all())
-        ctx_clausula = _inferir_contexto_clausula(
-            clausula,
-            k,
-            objeto_contrato=informe.contratista.objeto_contrato,
-        )
+        ctx_clausula = _inferir_contexto_clausula(clausula, k, objeto_contrato=informe.contratista.objeto_contrato)
 
         lineas_apuntes = [
             re.sub(r"^[\-\•\*\d\.\)\s]+", "", ln.strip())
@@ -437,14 +302,10 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
         vinetas_desarrollo = []
         resultados_entregables = []
 
-        # 1. Redactar numerales técnicos ricos por cada evidencia asociada
         for idx_ev, ev in enumerate(evidencias, start=1):
             meta_ev = ev.metadatos_ligeros or {}
             tag_ev = meta_ev.get("tag_semantico", "")
             lineas_ev = meta_ev.get("resumen_lineas") or []
-            hojas_ev = meta_ev.get("hojas") or []
-            cols_ev = meta_ev.get("encabezados_fila_1") or {}
-
             subtitulo = _limpiar_fragmento_significativo(lineas_ev, ev.nombre_original, nombre_contratista=nom_contratista)
             resumen_limpio = _resumir_contenido_observado_limpio(meta_ev, ev.nombre_original)
             sub_ref = f" — {subtitulo}" if subtitulo else ""
@@ -505,14 +366,7 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                     f"Se efectuó la actualización continua del estado de las tareas, historias de usuario y entregables "
                     f"en la herramienta institucional de seguimiento{cita_soporte}, manteniendo la trazabilidad al día."
                 )
-            elif ev.tipo_archivo == "EXCEL" and (hojas_ev or cols_ev):
-                titulo_pto = f"Estructuración, Procesamiento y Validación Técnica de Datos ({ev.nombre_original})"
-                desc_pto = (
-                    f"Se consolidó y verificó la estructura de datos contenida en el archivo '{ev.nombre_original}' "
-                    f"(hojas: {', '.join(hojas_ev[:4])}){cita_soporte}, validando la integridad de los registros."
-                )
             else:
-                # Soportes gráficos / capturas de pantalla: Redacción técnica limpia y contextualizada a la obligación K
                 plant_tit, plant_desc = variantes_soportes_graficos[(idx_ev - 1) % len(variantes_soportes_graficos)]
                 titulo_pto = f"{plant_tit} — {ctx_clausula['tema_corto'][:60]}"
                 desc_pto = plant_desc.format(
@@ -540,7 +394,6 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                 "descripcion": f"Soporte técnico y funcional ('{ev.nombre_original}') que respalda: {desc_pto}",
             })
 
-        # 2. Incorporar apuntes del contratista si existen
         for idx_p, punto in enumerate(lineas_apuntes, start=len(items_numerados) + 1):
             if ":" in punto and len(punto.split(":", 1)[0].split()) <= 10:
                 partes = punto.split(":", 1)
@@ -569,7 +422,6 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
                 "descripcion": f"Resultado verificable de la Obligación {k}: {desc_limpia}",
             })
 
-        # 3. Asegurar al menos 2 numerales densos y profundos en todas las obligaciones
         if len(items_numerados) == 0:
             t1 = f"Ejecución de Actividades Técnicas — {ctx_clausula['tema_corto']}"
             d1 = (
@@ -614,7 +466,6 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
             _pulir_redaccion_local(encabezado_tabla + "\n".join(items_numerados) + cierre_tabla)
         )
 
-        # 4. Construir bloques_evidencias para `Obligacion K.docx` y subitems para `REPORTE OTI.docx`
         bloques_evidencias = []
         subitems_anexos = []
 
@@ -688,7 +539,6 @@ def _generar_redaccion_demo_inteligente(informe, detalles_lista: List[Any]) -> d
 
 
 def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_generales_mes: str = "") -> str:
-    """Construye un prompt Single-Shot JSON ultra-optimizado en tokens."""
     c = informe.contratista
     items_payload = []
     bolsa_global_archivos = []
@@ -708,49 +558,33 @@ def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_ge
             "apuntes": (det.apuntes_contratista or "")[: c.max_caracteres_apuntes],
         })
 
-    bloque_apuntes_globales = ""
-    if apuntes_generales_mes and apuntes_generales_mes.strip():
-        bloque_apuntes_globales = (
-            f"\nAPUNTES GLOBALES DEL MES (Distribúyelos en la obligación más afín):\n"
-            f"{apuntes_generales_mes.strip()[:3000]}\n"
-        )
+    prompt = f"""Eres el redactor técnico experto en contratación pública y supervisión contractual.
+Redacta la documentación del Pago {informe.numero_pago:02d} ({informe.nombre_mes} {informe.anio}) para el contratista {c.nombres_apellidos}.
 
-    prompt = f"""Eres el redactor técnico experto en informes de supervisión y cuentas de cobro para contratistas del Estado.
-Redacta en UN SOLO OBJETO JSON ESTRUCTURADO la documentación del Pago {informe.numero_pago:02d} ({informe.nombre_mes} {informe.anio}).
+CONTRATO: {c.numero_contrato}-{c.anio_contrato} | PROYECTO: {c.proyecto_area}
+OBJETO: {_normalizar_espacios(c.objeto_contrato)}
 
-DATOS DEL CONTRATO:
-Contratista: {c.nombres_apellidos} | Contrato: {c.numero_contrato}-{c.anio_contrato} | Proyecto(s): {c.proyecto_area}
-Objeto: {_normalizar_espacios(c.objeto_contrato)}
-{bloque_apuntes_globales}
-ARCHIVOS SOPORTE SUBIDOS (Asócialos en `bloques_evidencias` de su obligación más afín usando el nombre exacto en `archivo_asociado`):
+ARCHIVOS SOPORTE ASOCIADOS:
 {json.dumps(bolsa_global_archivos, ensure_ascii=False, separators=(",", ":"))}
-
-{FEW_SHOT_STYLE_REFERENCE}
 
 OBLIGACIONES A REDACTAR:
 {json.dumps(items_payload, ensure_ascii=False, separators=(",", ":"))}
 
-RESPONDE EXCLUSIVAMENTE CON UN JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
+INSTRUCCIONES DE CALIDAD OBLIGATORIAS:
+1. En `texto_tabla_principal`: Genera una redacción formal numerada (1. Título técnico: descripción de 4 a 6 líneas con impacto operativo) que alcance 250 a 350 palabras por obligación. NO uses corchetes angulares ni etiquetas HTML.
+2. En `desarrollo_detallado_oti`: Incluye 2 párrafos introductorios y viñetas técnicas sustanciosas.
+3. Responde EXCLUSIVAMENTE con un JSON válido con esta estructura:
 {{
   "obligaciones": {{
     "<numero_obligacion>": {{
-      "texto_tabla_principal": "Texto extenso y numerado (1. Título: ..., 2. Título: ...) de 250-400 palabras libre de etiquetas XML/HTML",
+      "texto_tabla_principal": "Texto extenso numerado libre de etiquetas HTML...",
       "desarrollo_detallado_oti": {{
-        "parrafos_introductorios": ["Párrafo 1 formal...", "Párrafo 2 técnico..."],
-        "vinetas_desarrollo": [
-          {{"titulo": "Título técnico", "descripcion": "Explicación rigurosa de 5-7 líneas..."}}
-        ],
-        "resultados_entregables": [
-          {{"titulo": "Entregable verificable", "descripcion": "Descripción del producto obtenido."}}
-        ]
+        "parrafos_introductorios": ["Párrafo formal 1...", "Párrafo técnico 2..."],
+        "vinetas_desarrollo": [{{"titulo": "Título técnico", "descripcion": "Explicación exhaustiva..."}}],
+        "resultados_entregables": [{{"titulo": "Entregable verificable", "descripcion": "Descripción..."}}]
       }},
       "bloques_evidencias": [
-        {{
-          "numero": 1,
-          "titulo": "Título técnico formal de la evidencia",
-          "descripcion": "Explicación técnica de 4-5 líneas de lo que demuestra este soporte.",
-          "archivo_asociado": "nombre_exacto_archivo.ext"
-        }}
+        {{"numero": 1, "titulo": "Título de la evidencia", "descripcion": "Explicación técnica...", "archivo_asociado": "archivo.ext"}}
       ]
     }}
   }}
@@ -759,7 +593,6 @@ RESPONDE EXCLUSIVAMENTE CON UN JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 
 
 def _extraer_json_limpio(texto_respuesta: str) -> dict:
-    """Extrae y parsea el objeto JSON devuelto por el LLM."""
     limpio = texto_respuesta.strip()
     match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", limpio, flags=re.DOTALL)
     if match:
@@ -772,122 +605,57 @@ def _extraer_json_limpio(texto_respuesta: str) -> dict:
     return json.loads(limpio)
 
 
-def _llamar_hermes_agent_fifo(prompt: str) -> Optional[dict]:
-    """Conecta con Hermes Agent respetando la cola FIFO."""
-    import base64
+def _llamar_ollama_local_directo(prompt: str) -> Optional[dict]:
+    """Llamada directa optimizada a tu HP OMEN 14 via Cloudflare Tunnel sin bloqueos."""
+    base_url = getattr(settings, "HERMES_BASE_URL", "").strip()
+    if not base_url:
+        return None
 
-    hermes_auth_path = os.path.expandvars(r"%LOCALAPPDATA%\hermes\auth.json")
-    hermes_model = getattr(settings, "HERMES_MODEL", "gpt-5.4")
-    hermes_reasoning = getattr(settings, "HERMES_REASONING", "low")
+    try:
+        from openai import OpenAI
 
-    with _HERMES_FIFO_LOCK:
-        if os.path.exists(hermes_auth_path):
-            try:
-                from openai import OpenAI
+        url_limpia = base_url.rstrip("/")
+        if not url_limpia.endswith("/v1"):
+            url_limpia += "/v1"
 
-                with open(hermes_auth_path, "r", encoding="utf-8") as f_auth:
-                    auth_data = json.load(f_auth)
+        modelo = getattr(settings, "HERMES_MODEL", "qwen2.5:7b-instruct")
+        logger.warning("Enviando petición a tu OMEN 14 en: %s con modelo %s", url_limpia, modelo)
 
-                codex_tokens = (
-                    auth_data.get("providers", {})
-                    .get("openai-codex", {})
-                    .get("tokens", {})
-                )
-                access_token = codex_tokens.get("access_token", "").strip()
-                if access_token:
-                    headers = {
-                        "User-Agent": "HermesAgent/0.11.0",
-                        "originator": "hermes-agent",
-                    }
-                    try:
-                        parts = access_token.split(".")
-                        if len(parts) >= 2:
-                            payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
-                            jwt_auth = json.loads(base64.urlsafe_b64decode(payload_b64)).get(
-                                "https://api.openai.com/auth", {}
-                            )
-                            acct_id = jwt_auth.get("chatgpt_account_id")
-                            if acct_id:
-                                headers["ChatGPT-Account-ID"] = acct_id
-                    except Exception:
-                        pass
+        client = OpenAI(
+            base_url=url_limpia,
+            api_key=getattr(settings, "HERMES_API_KEY", "ollama-local"),
+            default_headers={"User-Agent": "CuentasURT-SaaS/1.0"},
+            timeout=180.0,
+            max_retries=0,
+        )
 
-                    client = OpenAI(
-                        api_key=access_token,
-                        base_url="https://chatgpt.com/backend-api/codex",
-                        default_headers=headers,
-                        timeout=180.0,
-                        max_retries=0,
-                    )
-                    stream = client.responses.create(
-                        model=hermes_model,
-                        instructions=(
-                            "Eres el redactor técnico experto en supervisión y cuentas de cobro para contratistas. "
-                            "Responde EXCLUSIVAMENTE con un objeto JSON válido."
-                        ),
-                        input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-                        store=False,
-                        reasoning={"effort": hermes_reasoning},
-                        stream=True,
-                    )
-                    partes_texto = []
-                    for ev in stream:
-                        if getattr(ev, "type", "") == "response.output_text.delta":
-                            partes_texto.append(getattr(ev, "delta", ""))
-                    texto_completo = "".join(partes_texto).strip()
-                    if texto_completo and "{" in texto_completo:
-                        return _extraer_json_limpio(texto_completo)
-            except Exception as exc:
-                logger.info("Hermes OAuth Codex directo no retornó JSON (%s).", exc)
+        resp = client.chat.completions.create(
+            model=modelo,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Eres un redactor técnico experto en contratación pública. Responde ÚNICAMENTE en JSON válido sin texto adicional.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
 
-        # B. Modo Servidor HTTP Compatible con OpenAI / Ollama Local
-        base_url = getattr(settings, "HERMES_BASE_URL", "")
-        if base_url:
-            try:
-                from openai import OpenAI
-
-                url_limpia = base_url.strip().rstrip("/")
-                if not url_limpia.endswith("/v1"):
-                    url_limpia += "/v1"
-
-                logger.warning(">>> LLAMANDO A TU OMEN 14 EN: %s CON MODELO %s <<<", url_limpia, hermes_model)
-
-                client = OpenAI(
-                    base_url=url_limpia,
-                    api_key=getattr(settings, "HERMES_API_KEY", "ollama-local"),
-                    default_headers={
-                        "ngrok-skip-browser-warning": "true",
-                        "User-Agent": "CuentasURT/1.0",
-                    },
-                    timeout=120.0,
-                    max_retries=1,
-                )
-                resp = client.chat.completions.create(
-                    model=hermes_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "Eres un redactor técnico experto en contratación pública y cuentas de cobro. "
-                                "Responde ÚNICAMENTE con un objeto JSON válido según la estructura requerida, sin texto adicional."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.2,
-                )
-                contenido = resp.choices[0].message.content
-                logger.warning(">>> ¡RESPUESTA RECIBIDA CON ÉXITO DE OLLAMA! <<<")
-                return _extraer_json_limpio(contenido)
-            except Exception as exc:
-                logger.error(">>> ERROR AL LLAMAR A OLLAMA: %s <<<", exc)
-
-    return None
+        contenido = resp.choices[0].message.content
+        datos = _extraer_json_limpio(contenido)
+        if datos and "obligaciones" in datos:
+            logger.warning("¡Respuesta exitosa recibida de tu OMEN 14!")
+            return datos
+        else:
+            logger.error("Ollama respondió pero el JSON no contiene 'obligaciones'.")
+            return None
+    except Exception as exc:
+        logger.error("Fallo al conectar con Ollama en tu OMEN (%s).", exc)
+        return None
 
 
 def _llamar_gemini_fallback(prompt: str) -> Optional[dict]:
-    """Fallback automático #1: Google Gemini API."""
     api_key = getattr(settings, "GEMINI_API_KEY", "")
     if not api_key:
         return None
@@ -899,25 +667,20 @@ def _llamar_gemini_fallback(prompt: str) -> Optional[dict]:
         response = client.models.generate_content(
             model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                response_mime_type="application/json",
-            ),
+            config=types.GenerateContentConfig(temperature=0.2, response_mime_type="application/json"),
         )
         return _extraer_json_limpio(response.text)
     except Exception as exc:
-        logger.warning("Fallback Gemini API falló (%s).", exc)
+        logger.warning("Fallback Gemini falló (%s).", exc)
         return None
 
 
 def _llamar_openai_fallback(prompt: str) -> Optional[dict]:
-    """Fallback automático #2: OpenAI API directa."""
     api_key = getattr(settings, "OPENAI_API_KEY", "")
     if not api_key:
         return None
     try:
         from openai import OpenAI
-
         client = OpenAI(api_key=api_key, timeout=25.0)
         resp = client.chat.completions.create(
             model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
@@ -930,15 +693,14 @@ def _llamar_openai_fallback(prompt: str) -> Optional[dict]:
         )
         return _extraer_json_limpio(resp.choices[0].message.content)
     except Exception as exc:
-        logger.warning("Fallback OpenAI API falló (%s).", exc)
+        logger.warning("Fallback OpenAI falló (%s).", exc)
         return None
 
 
 def _calcular_huella_obligacion(det, informe) -> str:
-    """Calcula un hash MD5 único con el estado exacto de la obligación K (incluyendo versión de motor v2)."""
     evs = [f"{ev.nombre_original}:{ev.tamano_bytes}" for ev in det.archivos_evidencia.all()]
     estado_raw = (
-        f"V2|CTO:{informe.contratista.numero_contrato}|PAGO:{informe.numero_pago}:{informe.mes}:{informe.anio}|"
+        f"V3|CTO:{informe.contratista.numero_contrato}|PAGO:{informe.numero_pago}:{informe.mes}:{informe.anio}|"
         f"OB:{det.obligacion.numero_obligacion}:{det.obligacion.descripcion_clausula}|"
         f"APUNTES:{(det.apuntes_contratista or '').strip()}|"
         f"ARCHIVOS:{'|'.join(sorted(evs))}"
@@ -953,7 +715,6 @@ def redactar_informe_con_ia(
     apuntes_generales_mes: str = "",
     ignorar_cache: bool = True,
 ) -> Dict[str, Any]:
-    """Punto de entrada principal de `services/ai_writer.py`."""
     contratista = informe.contratista
 
     if not contratista.activo_mes_actual:
@@ -981,25 +742,27 @@ def redactar_informe_con_ia(
     if not detalles:
         raise ValueError("No se encontraron obligaciones configuradas para redactar.")
 
-    # Forzar siempre redacción limpia con tu Ollama local
     detalles_a_redactar = detalles
-
     prompt = _construir_prompt_single_shot(informe, detalles_a_redactar, apuntes_generales_mes=apuntes_generales_mes)
     motor_usado = "Modo Offline Inteligente (0 Tokens Externos)"
     payload_ia = None
 
     if not forzar_demo and not getattr(settings, "LOCAL_ONLY_AI", False):
-        payload_ia = _llamar_hermes_agent_fifo(prompt)
-        if payload_ia and "obligaciones" in payload_ia:
-            motor_usado = f"Hermes Agent FIFO ({getattr(settings, 'HERMES_MODEL', 'openai-codex')})"
-        else:
-            payload_ia = _llamar_gemini_fallback(prompt)
+        with _HERMES_FIFO_LOCK:
+            # 1. PRIORIDAD ABSOLUTA: Llamar a tu OMEN 14
+            payload_ia = _llamar_ollama_local_directo(prompt)
             if payload_ia and "obligaciones" in payload_ia:
-                motor_usado = f"Fallback API Key Gemini ({getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash')})"
+                motor_usado = f"Ollama Local OMEN 14 ({getattr(settings, 'HERMES_MODEL', 'qwen2.5')})"
             else:
-                payload_ia = _llamar_openai_fallback(prompt)
+                # 2. Respaldo Gemini
+                payload_ia = _llamar_gemini_fallback(prompt)
                 if payload_ia and "obligaciones" in payload_ia:
-                    motor_usado = f"Fallback API Key OpenAI ({getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')})"
+                    motor_usado = f"Fallback Gemini ({getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash')})"
+                else:
+                    # 3. Respaldo OpenAI
+                    payload_ia = _llamar_openai_fallback(prompt)
+                    if payload_ia and "obligaciones" in payload_ia:
+                        motor_usado = f"Fallback OpenAI ({getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')})"
 
     if not payload_ia or "obligaciones" not in payload_ia:
         payload_ia = _generar_redaccion_demo_inteligente(informe, detalles_a_redactar)
