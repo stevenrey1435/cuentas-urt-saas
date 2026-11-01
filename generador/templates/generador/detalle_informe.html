@@ -32,10 +32,10 @@
             <!-- Botón Principal de Descarga ZIP -->
             <div class="flex items-center gap-2 shrink-0">
                 {% if informe.archivo_zip_generado %}
-                <a href="{% url 'generador:descargar_zip_paquete' informe.id %}"
-                   class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-2xl text-xs shadow-md transition flex items-center gap-1.5">
+                <button type="button" onclick="abrirModalTerminosDescarga('{% url 'generador:descargar_zip_paquete' informe.id %}')"
+                   class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-2xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
                     <span>📦 Descargar Paquete (.ZIP)</span>
-                </a>
+                </button>
                 {% endif %}
             </div>
         </div>
@@ -262,7 +262,11 @@
                                 {% for ev in det.archivos_evidencia.all %}
                                 <div id="fila-evidencia-{{ ev.id }}" class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group">
                                     <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia({{ ev.id }})" title="Clic para abrir en visor y agregar observación">
-                                        {% if ev.es_imagen and ev.url_archivo %}
+                                        {% if ev.es_confidencial_sin_archivo %}
+                                        <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400 font-bold text-xs" title="Soporte Confidencial / Escrito">
+                                            🔒
+                                        </div>
+                                        {% elif ev.es_imagen and ev.url_archivo %}
                                         <img src="{{ ev.url_archivo }}" alt="{{ ev.nombre_original }}" class="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0 bg-slate-950">
                                         {% else %}
                                         <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-300 font-bold text-[10px]">
@@ -272,6 +276,9 @@
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-center gap-1.5">
                                                 <span class="font-semibold text-slate-200 truncate">{{ ev.nombre_original }}</span>
+                                                {% if ev.es_confidencial_sin_archivo %}
+                                                <span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
+                                                {% endif %}
                                                 <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
                                             </div>
                                             <p id="snippet-obs-{{ ev.id }}" class="text-[11px] text-slate-400 truncate mt-0.5">
@@ -299,12 +306,16 @@
                                 {% endfor %}
                             </div>
 
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
-                                <div class="flex items-center gap-2">
-                                    <label class="text-[11px] text-slate-400 shrink-0">+ Agregar soporte:</label>
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <label class="text-[11px] text-slate-400 shrink-0">+ Archivo soporte:</label>
                                     <input type="file" name="archivos_soporte" multiple id="input-soporte-{{ det.id }}"
                                            onchange="subirSoporteIndividualInmediato(this, {{ det.id }})"
                                            class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-slate-800 file:text-slate-200 cursor-pointer">
+                                    <button type="button" onclick="abrirModalEvidenciaEscrita({{ det.id }}, {{ det.obligacion.numero_obligacion }})"
+                                            class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/50 hover:bg-indigo-900/50 transition flex items-center gap-1 shrink-0">
+                                        <span>📝 + Soporte Escrito (Confidencial)</span>
+                                    </button>
                                 </div>
                                 <span id="loading-soporte-{{ det.id }}" class="hidden text-[11px] text-emerald-400 flex items-center gap-1">
                                     ⏳ Subiendo soporte...
@@ -325,18 +336,165 @@
         </div>
     </div>
 
-    <!-- Botón Flotante para Descargar el Paquete -->
-    {% if informe.archivo_zip_generado %}
-    <div class="sticky bottom-6 flex justify-end">
-        <a href="{% url 'generador:descargar_zip_paquete' informe.id %}"
-           class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-3.5 rounded-2xl text-sm shadow-xl flex items-center gap-2 transition">
-            <span>📦 Descargar Paquete Listo (.ZIP)</span>
-        </a>
-    </div>
-    {% endif %}
+
 
 </div>
 
+
+
+<!-- MODAL DE TÉRMINOS Y EXENCIÓN DE RESPONSABILIDAD ANTES DE DESCARGAR ZIP -->
+<div id="modal-terminos-descarga" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in duration-150">
+        <!-- Header -->
+        <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 font-extrabold text-sm flex items-center justify-center shrink-0">
+                    📋
+                </span>
+                <div>
+                    <h3 class="text-sm sm:text-base font-extrabold text-white">Términos de Uso y Descarga Oficial del Paquete</h3>
+                    <p class="text-[11px] text-slate-400">Consentimiento legal, política de privacidad y exención de responsabilidad</p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarModalTerminosDescarga()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition text-sm">
+                ✕
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed">
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                <p class="text-slate-200">
+                    Antes de descargar los documentos Word y el paquete .ZIP de tu cuenta de cobro, por favor ten en cuenta el marco normativo colombiano que rige esta herramienta de asistencia técnica:
+                </p>
+            </div>
+
+            <div class="space-y-3">
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 space-y-1">
+                    <h4 class="font-bold text-white text-[11px] flex items-center gap-1.5">
+                        <span>1.</span> Naturaleza del Servicio y Exención de Responsabilidad (Código Civil Arts. 1494, 1604, 2341)
+                    </h4>
+                    <p class="text-[11px] text-slate-400">
+                        Cuentas al Día es exclusivamente un instrumento de <strong>ayuda tecnológica y mecanografía documental</strong>. No constituye asesoría jurídica, auditoría ni supervisión estatal. El proveedor no asume responsabilidad civil, contractual o extracontractual por glosas, requerimientos, devoluciones o decisiones de la entidad contratante.
+                    </p>
+                </div>
+
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 space-y-1">
+                    <h4 class="font-bold text-white text-[11px] flex items-center gap-1.5">
+                        <span>2.</span> Autoría y Responsabilidad Personal del Contratista (Ley 80 de 1993 y Ley 1150 de 2007)
+                    </h4>
+                    <p class="text-[11px] text-slate-400">
+                        En virtud del Estatuto General de Contratación Pública, el contratista es el <strong>único autor material, firmante y responsable personal, disciplinario, fiscal y penal</strong> de los hechos, horas, soportes y actividades certificadas. El usuario asume el deber ineludible de revisar y verificar cada párrafo antes de su radicación (Doctrina de Control Humano Inexcusable / <em>Human-in-the-Loop</em>).
+                    </p>
+                </div>
+
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 space-y-1">
+                    <h4 class="font-bold text-white text-[11px] flex items-center gap-1.5">
+                        <span>3.</span> Política de Privacidad y Temporalidad de Archivos (Ley 1581 de 2012)
+                    </h4>
+                    <p class="text-[11px] text-slate-400">
+                        <strong>No almacenamos copias permanentes de tus soportes.</strong> Los archivos cargados residen de forma estrictamente transitoria para la inferencia algorítmica y la compilación del paquete .ZIP. La plataforma no crea copias no autorizadas, no entrena modelos con tus datos privados ni comercializa tu información.
+                    </p>
+                </div>
+
+                <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 space-y-1">
+                    <h4 class="font-bold text-white text-[11px] flex items-center gap-1.5">
+                        <span>4.</span> Reserva Legal y Datos Clasificados (Ley 1712 de 2014 y Ley 1273 de 2009)
+                    </h4>
+                    <p class="text-[11px] text-slate-400">
+                        El contratista declara que no ha subido información sujeta a secreto de Estado o datos clasificados que vulneren la reserva legal de la entidad pública. Para tareas con datos sensibles, certifica haber empleado la opción de soporte escrito confidencial sin adjuntos gráficos.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Checkbox de Consentimiento -->
+            <div class="pt-2">
+                <label class="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/50 hover:bg-emerald-950/50 cursor-pointer transition">
+                    <input type="checkbox" id="check-acepto-terminos-zip" onchange="toggleBotonDescargaZip(this)"
+                           class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-700 bg-slate-900 mt-0.5 cursor-pointer">
+                    <span class="text-xs text-slate-200 select-none">
+                        He leído, comprendo y acepto los <strong>Términos de Uso, Política de Temporalidad de Archivos y Exención de Responsabilidad</strong>. Certifico que he revisado el contenido de mi cuenta de cobro.
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-slate-950/80 border-t border-slate-800 px-5 py-3.5 flex items-center justify-between gap-3">
+            <button type="button" onclick="cerrarModalTerminosDescarga()"
+                    class="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-slate-800 transition">
+                Cancelar
+            </button>
+            <button type="button" id="btn-confirmar-descarga-zip" disabled onclick="ejecutarDescargaZipOficial()"
+                    class="bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <span>📦 Confirmar y Descargar (.ZIP)</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL REGISTRO DE EVIDENCIA ESCRITA / SOPORTE CONFIDENCIAL -->
+<div id="modal-evidencia-escrita" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in duration-150">
+        <!-- Header -->
+        <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-3.5 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+                    📝
+                </span>
+                <div>
+                    <h3 class="text-xs sm:text-sm font-bold text-white">Registrar Soporte Escrito (Confidencial)</h3>
+                    <p class="text-[11px] text-slate-400" id="modal-escrita-subtitulo">Obligación Contractual</p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarModalEvidenciaEscrita()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition text-sm">
+                ✕
+            </button>
+        </div>
+
+        <!-- Body -->
+        <form id="form-evidencia-escrita" onsubmit="enviarEvidenciaEscritaAJAX(event)" class="p-5 space-y-4 text-xs">
+            <input type="hidden" id="escrita-detalle-id" value="">
+            
+            <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1 text-slate-300">
+                <p class="font-bold text-amber-400 text-[11px] flex items-center gap-1">
+                    <span>🔒</span> Reserva Legal y Confidencialidad (Ley 1712 de 2014)
+                </p>
+                <p class="text-[11px] text-slate-400">
+                    Usa esta opción para registrar actividades con datos sensibles, contraseñas, secretos de TI o información clasificada que no debas subir en imagen. La IA redactará la actividad formal y certificará el soporte sin exponer datos privados.
+                </p>
+            </div>
+
+            <div class="space-y-1">
+                <label class="font-bold text-slate-200 block">Título Técnico del Soporte:</label>
+                <input type="text" id="escrita-titulo" required
+                       placeholder="Ej: Acta de pruebas técnicas en base de datos interna URT"
+                       class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none">
+            </div>
+
+            <div class="space-y-1">
+                <label class="font-bold text-slate-200 block">Descripción Detallada de la Actividad (para la IA):</label>
+                <textarea id="escrita-observacion" rows="4" required
+                          placeholder="Describe qué hiciste, en qué entorno, con quién te reuniste o qué componentes verificaste..."
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <span id="escrita-status" class="text-[11px] text-slate-400"></span>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="cerrarModalEvidenciaEscrita()"
+                            class="text-slate-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="btn-submit-escrita"
+                            class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow transition flex items-center gap-1">
+                        <span>💾 Registrar Soporte</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- MODAL VISOR INTERACTIVO DE EVIDENCIAS (1 A 1) -->
 <div id="modal-visor-evidencias" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -475,6 +633,151 @@
 <script>
 
     // ==========================================
+    // MODAL DE TÉRMINOS ANTES DE DESCARGAR ZIP
+    // ==========================================
+    let _urlDescargaZipPendiente = '';
+
+    function abrirModalTerminosDescarga(urlDescarga) {
+        _urlDescargaZipPendiente = urlDescarga;
+        const check = document.getElementById('check-acepto-terminos-zip');
+        const btn = document.getElementById('btn-confirmar-descarga-zip');
+        if (check) check.checked = false;
+        if (btn) btn.disabled = true;
+
+        const modal = document.getElementById('modal-terminos-descarga');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function cerrarModalTerminosDescarga() {
+        const modal = document.getElementById('modal-terminos-descarga');
+        if (modal) modal.classList.add('hidden');
+        _urlDescargaZipPendiente = '';
+    }
+
+    function toggleBotonDescargaZip(checkbox) {
+        const btn = document.getElementById('btn-confirmar-descarga-zip');
+        if (btn) btn.disabled = !checkbox.checked;
+    }
+
+    function ejecutarDescargaZipOficial() {
+        if (!_urlDescargaZipPendiente) return;
+        const url = _urlDescargaZipPendiente;
+        cerrarModalTerminosDescarga();
+        mostrarToast('📦 Iniciando descarga de tu paquete oficial...');
+        window.location.href = url;
+    }
+
+    // ==========================================
+    // MODAL REGISTRO DE EVIDENCIA ESCRITA
+    // ==========================================
+    function abrirModalEvidenciaEscrita(detalleId, numeroObligacion) {
+        document.getElementById('escrita-detalle-id').value = detalleId;
+        document.getElementById('modal-escrita-subtitulo').textContent = `Obligación Contractual N° ${numeroObligacion}`;
+        document.getElementById('escrita-titulo').value = '';
+        document.getElementById('escrita-observacion').value = '';
+        document.getElementById('escrita-status').textContent = '';
+        const modal = document.getElementById('modal-evidencia-escrita');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function cerrarModalEvidenciaEscrita() {
+        const modal = document.getElementById('modal-evidencia-escrita');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    async function enviarEvidenciaEscritaAJAX(e) {
+        e.preventDefault();
+        const detalleId = document.getElementById('escrita-detalle-id').value;
+        const titulo = document.getElementById('escrita-titulo').value.trim();
+        const observacion = document.getElementById('escrita-observacion').value.trim();
+        const statusEl = document.getElementById('escrita-status');
+        const btnSubmit = document.getElementById('btn-submit-escrita');
+
+        if (!titulo || !observacion) return;
+
+        statusEl.innerHTML = '<span class="text-amber-400">⏳ Registrando...</span>';
+        btnSubmit.disabled = true;
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+            formData.append('titulo', titulo);
+            formData.append('observacion', observacion);
+
+            const res = await fetch(`/obligaciones/${detalleId}/agregar-evidencia-escrita/`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok && data.evidencia) {
+                cerrarModalEvidenciaEscrita();
+                mostrarToast('✓ Soporte confidencial registrado exitosamente');
+
+                // Agregar dinámicamente a la lista visual de la obligación
+                const ev = data.evidencia;
+                const contenedor = document.getElementById(`contenedor-soportes-${detalleId}`);
+                if (contenedor) {
+                    contenedor.classList.remove('hidden');
+                    const nombreEscapado = ev.nombre_original.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    const nombreJs = ev.nombre_original.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    const obsEscapada = ev.observacion.replace(/</g, '&lt;');
+
+                    const divHtml = document.createElement('div');
+                    divHtml.id = `fila-evidencia-${ev.id}`;
+                    divHtml.className = 'bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group';
+                    divHtml.innerHTML = `
+                        <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia(${ev.id})" title="Clic para abrir en visor y agregar observación">
+                            <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400 font-bold text-xs" title="Soporte Confidencial / Escrito">
+                                🔒
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-semibold text-slate-200 truncate">${nombreEscapado}</span>
+                                    <span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
+                                    <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                                </div>
+                                <p id="snippet-obs-${ev.id}" class="text-[11px] text-slate-400 truncate mt-0.5">
+                                    <span class="text-emerald-400 font-medium">📝 ${obsEscapada}</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="abrirVisorEvidencia(${ev.id})"
+                                    title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                                ✏️ Nota IA
+                            </button>
+                            <button type="button" onclick="eliminarSoporteIndividualAJAX(${ev.id}, ${detalleId}, '${nombreJs}')"
+                                    title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                                ✕
+                            </button>
+                        </div>
+                    `;
+                    contenedor.appendChild(divHtml);
+                }
+
+                // Actualizar contadores
+                const c1 = document.querySelectorAll(`.contador-soportes-${detalleId}`);
+                c1.forEach(el => el.textContent = data.total_soportes);
+                const c2 = document.querySelectorAll(`.span-contador-${detalleId}`);
+                c2.forEach(el => el.textContent = data.total_soportes);
+
+                // Agregar a TODAS_EVIDENCIAS
+                TODAS_EVIDENCIAS.push(ev);
+                const badge = document.getElementById('total-evidencias-badge');
+                if (badge) badge.textContent = TODAS_EVIDENCIAS.length;
+            } else {
+                throw new Error(data.error || 'Error al registrar soporte');
+            }
+        } catch (err) {
+            statusEl.innerHTML = `<span class="text-rose-400 font-semibold">${err.message}</span>`;
+        } finally {
+            btnSubmit.disabled = false;
+        }
+    }
+
+
+    // ==========================================
     // VISOR INTERACTIVO DE EVIDENCIAS (1 A 1)
     // ==========================================
     let TODAS_EVIDENCIAS = {{ todas_evidencias_json|safe }};
@@ -573,8 +876,24 @@
         btnDescargar.href = ev.url || '#';
         btnZoom.href = ev.url || '#';
 
-        if (ev.es_imagen && ev.url) {
+        if (ev.es_confidencial || ev.tipo_archivo === 'TEXTO_CONFIDENCIAL' || !ev.url) {
+            btnZoom.classList.add('hidden');
+            btnDescargar.classList.add('hidden');
+            pBox.innerHTML = `
+                <div class="text-center p-6 space-y-3 max-w-md">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl font-bold text-amber-400">
+                        🔒
+                    </div>
+                    <div>
+                        <span class="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase">Soporte Confidencial / Escrito</span>
+                        <p class="text-xs font-bold text-white break-all mt-2">${ev.nombre_original}</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Soporte documental registrado sin adjunto gráfico en observancia de la reserva legal y protección de datos (Ley 1712 de 2014). La IA utiliza tu descripción para argumentar el informe formal.</p>
+                    </div>
+                </div>
+            `;
+        } else if (ev.es_imagen && ev.url) {
             btnZoom.classList.remove('hidden');
+            btnDescargar.classList.remove('hidden');
             pBox.innerHTML = `
                 <img src="${ev.url}" alt="${ev.nombre_original}"
                      class="max-h-[420px] max-w-full object-contain rounded-xl shadow-md cursor-pointer transition hover:scale-[1.01]"
@@ -582,6 +901,7 @@
             `;
         } else {
             btnZoom.classList.add('hidden');
+            btnDescargar.classList.remove('hidden');
             pBox.innerHTML = `
                 <div class="text-center p-6 space-y-3">
                     <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl font-bold text-emerald-400">

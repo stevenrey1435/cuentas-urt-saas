@@ -462,6 +462,7 @@ class ArchivoEvidencia(models.Model):
         ("WORD", "Documento Word (.docx)"),
         ("CODIGO", "Script / Código Fuente (.py, .sql, .js, .sh)"),
         ("TEXTO", "Texto Plano / Logs (.txt, .log)"),
+        ("TEXTO_CONFIDENCIAL", "Evidencia Escrita / Soporte Confidencial (Sin archivo adjunto)"),
         ("OTRO", "Otro Tipo de Soporte"),
     ]
 
@@ -540,6 +541,11 @@ class ArchivoEvidencia(models.Model):
             return self.archivo.url if self.archivo else ""
         except Exception:
             return ""
+
+    @property
+    def es_confidencial_sin_archivo(self) -> bool:
+        """Indica si es un soporte documental redactado sin archivo físico por reserva o confidencialidad."""
+        return self.tipo_archivo == "TEXTO_CONFIDENCIAL" or not bool(self.archivo)
 
     @property
     def observacion_efectiva(self) -> str:

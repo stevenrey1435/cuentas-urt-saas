@@ -38,6 +38,11 @@ urlpatterns = [
         name="regenerar_obligacion_individual",
     ),
     path(
+        "obligaciones/<int:detalle_id>/agregar-evidencia-escrita/",
+        views.agregar_evidencia_escrita,
+        name="agregar_evidencia_escrita",
+    ),
+    path(
         "evidencias/<int:evidencia_id>/eliminar/",
         views.eliminar_evidencia,
         name="eliminar_evidencia",

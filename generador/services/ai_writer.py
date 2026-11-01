@@ -680,6 +680,7 @@ def _construir_prompt_single_shot(informe, detalles_lista: List[Any], apuntes_ge
                     "archivo": ev.nombre_original,
                     "tipo": ev.tipo_archivo,
                     "observacion_usuario": (getattr(ev, "observacion_usuario", "") or (ev.titulo_evidencia if not ev.titulo_evidencia.startswith("Soporte Técnico Obligación") else "")).strip(),
+                    "es_soporte_confidencial": getattr(ev, "tipo_archivo", "") == "TEXTO_CONFIDENCIAL" or not bool(ev.archivo),
                     "resumen_tecnico": ev.resumen_para_prompt_ia(),
                 }
                 for ev in archivos_ob
@@ -744,7 +745,7 @@ REGLAS DE ORO Y NEGATIVE CONSTRAINTS ESTRICTAS (CALIDAD DE AUDITORÍA 5.0/5.0):
 3. EXTENSIÓN Y DENSIDAD: Para cada obligación, `texto_tabla_principal` DEBE contener mínimo 2 numerales técnicos exhaustivos ('1. Título Técnico: ... 2. Título Técnico: ...') con un total de 250 a 350 palabras por obligación, detallando componentes, patrones, metodologías y aseguramiento de calidad.
 4. INTEGRIDAD DE EVIDENCIAS: Debes generar exactamente un bloque en `bloques_evidencias` por cada archivo presente en `archivos_asignados` de cada obligación. PROHIBIDO mover archivos entre obligaciones o inventar nombres de archivo. Si una obligación no tiene archivos asignados, genera un `bloques_evidencias` con el soporte documental de gestión.
 5. SIN HTML: PROHIBIDO incluir etiquetas HTML/XML (<para>, </para>, <br>).
-6. OBSERVACIONES DEL CONTRATISTA EN EVIDENCIAS: Si un archivo incluye `observacion_usuario`, tómala como testimonio técnico verídico de primera mano. DEBES integrar obligatoriamente estas observaciones para fundamentar y enriquecer las actividades técnicas en `texto_tabla_principal`, `vinetas_desarrollo` y `bloques_evidencias`.
+6. OBSERVACIONES DEL CONTRATISTA Y EVIDENCIAS ESCRITAS (SOPORTES CONFIDENCIALES): Si un soporte incluye `observacion_usuario` o es de tipo `TEXTO_CONFIDENCIAL` (evidencia escrita registrada sin archivo adjunto por reserva legal y confidencialidad Ley 1712 de 2014), tómala como testimonio técnico verídico de primera mano con plena validez probatoria oficial. DEBES integrar obligatoriamente estas observaciones para fundamentar y argumentar las actividades en `texto_tabla_principal`, `vinetas_desarrollo` y `bloques_evidencias`.
 
 RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
 {{

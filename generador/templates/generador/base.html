@@ -91,6 +91,12 @@
                     <span class="text-emerald-400/90 font-medium hidden sm:inline">{% if contratista.pases_disponibles == 1 %}pase{% else %}pases{% endif %}</span>
                 </div>
 
+                <!-- Botón Guía y Alcance -->
+                <button type="button" onclick="abrirModalGuiaAlcance()"
+                        class="text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 px-2.5 sm:px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+                    <span>📖 Guía y Alcance</span>
+                </button>
+
                 <!-- Botón Rápido de Recargar -->
                 <button type="button" onclick="abrirModalRecarga()"
                         class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
@@ -115,6 +121,10 @@
             </div>
             {% else %}
             <div class="flex items-center gap-2">
+                <button type="button" onclick="abrirModalGuiaAlcance()"
+                        class="text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 px-2.5 sm:px-3 py-1.5 rounded-xl transition flex items-center gap-1.5">
+                    <span>📖 Guía y Alcance</span>
+                </button>
                 <button type="button" onclick="alternarTemaVisual()" title="Cambiar tema claro/oscuro"
                         class="text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-semibold hover:bg-slate-800 transition">
                     ☀️ / 🌙
@@ -322,5 +332,110 @@
             }, 1000);
         }
     </script>
+
+    <!-- MODAL GUÍA RÁPIDA Y ALCANCE LEGAL DEL APLICATIVO -->
+    <div id="modal-guia-alcance" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in duration-150">
+            <!-- Header -->
+            <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-4 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-extrabold text-sm flex items-center justify-center shrink-0">
+                        📖
+                    </span>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-extrabold text-white">Guía de Uso y Alcance del Aplicativo</h3>
+                        <p class="text-[11px] text-slate-400">Flujo paso a paso, compromisos de privacidad y delimitación jurídica</p>
+                    </div>
+                </div>
+                <button type="button" onclick="cerrarModalGuiaAlcance()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition text-sm">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs text-slate-300 leading-relaxed">
+                <!-- 1. Qué hace la aplicación -->
+                <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
+                    <h4 class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                        <span>💡</span> ¿Qué es Cuentas al Día?
+                    </h4>
+                    <p class="text-slate-300">
+                        Es un <strong>asistente tecnológico inteligente de estructuración y mecanografía documental</strong> diseñado para facilitar la consolidación mensual de informes de ejecución contractual en el formato oficial <strong>GC-FO-15</strong>.
+                    </p>
+                </div>
+
+                <!-- 2. Flujo paso a paso -->
+                <div class="space-y-3">
+                    <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>⚡</span> Flujo Sencillo en 3 Pasos
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
+                            <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 font-extrabold text-[11px] flex items-center justify-center">1</span>
+                            <p class="font-bold text-white text-xs">Carga o Describe</p>
+                            <p class="text-[11px] text-slate-400">Sube tus soportes (.ZIP, capturas, PDFs) o registra <em>evidencias escritas</em> si tus actividades involucran datos reservados o sensibles.</p>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
+                            <span class="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-[11px] flex items-center justify-center">2</span>
+                            <p class="font-bold text-white text-xs">Generación con IA</p>
+                            <p class="text-[11px] text-slate-400">La IA redacta en pretérito formal impersonal con rigor técnico de auditoría, distribuyendo evidencias equitativamente entre las obligaciones.</p>
+                        </div>
+                        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
+                            <span class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 font-extrabold text-[11px] flex items-center justify-center">3</span>
+                            <p class="font-bold text-white text-xs">Revisa y Descarga</p>
+                            <p class="text-[11px] text-slate-400">Afina notas en el Visor 1 a 1, revisa la redacción y descarga tu paquete .ZIP con los 2N+2 documentos Word (.docx) listos.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. A qué se compromete y a qué no -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- A qué se compromete -->
+                    <div class="bg-emerald-950/20 border border-emerald-900/50 rounded-xl p-4 space-y-2">
+                        <h4 class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                            <span>✓</span> A qué se compromete la herramienta
+                        </h4>
+                        <ul class="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                            <li>Estructurar tus documentos según la plantilla oficial GC-FO-15.</li>
+                            <li>Redactar actividades densas y sobrias evitando la copia textual de cláusulas.</li>
+                            <li><strong>Privacidad y temporalidad de archivos:</strong> Tus evidencias se procesan exclusivamente para la inferencia y generación temporal; <strong>no se guardan copias permanentes ni se comercializa tu información</strong>.</li>
+                        </ul>
+                    </div>
+
+                    <!-- A qué NO se compromete -->
+                    <div class="bg-rose-950/20 border border-rose-900/50 rounded-xl p-4 space-y-2">
+                        <h4 class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                            <span>⚠</span> A qué NO se compromete (Exención)
+                        </h4>
+                        <ul class="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                            <li><strong>Es una herramienta de ayuda mecanográfica:</strong> No reemplaza la voluntad, criterio ni verificación del contratista.</li>
+                            <li><strong>No garantiza aprobación contractual:</strong> El supervisor designado por la entidad estatal es el único facultado para aprobar o requerir ajustes en los informes.</li>
+                            <li><strong>Responsabilidad legal:</strong> El contratista es el único firmante y responsable personal, civil y disciplinario de su cuenta de cobro ante el Estado.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-slate-950/80 border-t border-slate-800 px-5 py-3 flex justify-end">
+                <button type="button" onclick="cerrarModalGuiaAlcance()"
+                        class="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl text-xs transition">
+                    Entendido, Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function abrirModalGuiaAlcance() {
+            const m = document.getElementById('modal-guia-alcance');
+            if (m) m.classList.remove('hidden');
+        }
+        function cerrarModalGuiaAlcance() {
+            const m = document.getElementById('modal-guia-alcance');
+            if (m) m.classList.add('hidden');
+        }
+    </script>
+
 </body>
 </html>

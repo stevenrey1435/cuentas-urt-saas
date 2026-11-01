@@ -743,6 +743,21 @@ def generar_anexo_evidencias_obligacion(detalle, carpeta_anexos_destino: str, ru
                 r_ref.font.name = "Arial"
                 r_ref.font.size = Pt(9.5)
 
+    # Incrustar referencias formales a soportes confidenciales / evidencias escritas sin archivo físico
+    for ev in evidencias_db:
+        if ev.nombre_original not in archivos_ya_incrustados and (getattr(ev, "tipo_archivo", "") == "TEXTO_CONFIDENCIAL" or not ev.archivo):
+            archivos_ya_incrustados.add(ev.nombre_original)
+            p_conf = doc.add_paragraph()
+            p_conf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            obs_txt = f" — Detalle de ejecución: {ev.observacion_usuario}" if ev.observacion_usuario else ""
+            r_conf = p_conf.add_run(
+                f"[Soporte Técnico Documental Registrado: {ev.nombre_original}{obs_txt}. "
+                f"Actividad registrada y certificada sin soporte gráfico adjunto en observancia del principio de reserva legal y confidencialidad institucional (Ley 1712 de 2014)]."
+            )
+            r_conf.italic = True
+            r_conf.font.name = "Arial"
+            r_conf.font.size = Pt(9.5)
+
     os.makedirs(os.path.dirname(ruta_salida_docx), exist_ok=True)
     doc.save(ruta_salida_docx)
     return ruta_salida_docx

@@ -302,6 +302,7 @@ def detalle_informe(request, informe_id: int):
                 "nombre_original": ev.nombre_original,
                 "tipo_archivo": ev.tipo_archivo,
                 "es_imagen": ev.es_imagen,
+                "es_confidencial": ev.es_confidencial_sin_archivo,
                 "url": ev.url_archivo,
                 "tamano_kb": round(ev.tamano_bytes / 1024, 1) if ev.tamano_bytes else 0,
                 "observacion": getattr(ev, "observacion_usuario", "") or "",
@@ -553,6 +554,63 @@ def guardar_observacion_evidencia(request, evidencia_id: int):
         "evidencia_id": ev.id,
         "observacion": ev.observacion_usuario,
         "titulo_evidencia": ev.titulo_evidencia,
+    })
+
+
+@require_POST
+def agregar_evidencia_escrita(request, detalle_id: int):
+    """
+    Registra un soporte de actividad puramente textual (sin adjunto gráfico o binario).
+    Ideal para labores técnicas con datos sensibles, material clasificado o reserva legal (Ley 1712 de 2014).
+    Alimenta directamente el prompt de la IA y genera el certificado documental en los anexos Word.
+    """
+    contratista_sesion = _obtener_contratista_activo(request)
+    if not contratista_sesion:
+        return JsonResponse({"ok": False, "error": "Sesión no válida o expirada"}, status=401)
+
+    detalle = get_object_or_404(
+        DetalleEjecucionObligacion.objects.select_related("informe__contratista", "obligacion"),
+        id=detalle_id,
+        informe__contratista=contratista_sesion,
+    )
+
+    titulo = request.POST.get("titulo", "").strip()
+    observacion = request.POST.get("observacion", "").strip()
+
+    if not titulo:
+        titulo = f"Soporte Documental Actividad {detalle.obligacion.numero_obligacion} (Sin Adjunto por Reserva)"
+    if not observacion:
+        observacion = titulo
+
+    orden_actual = detalle.archivos_evidencia.count() + 1
+    ev = ArchivoEvidencia.objects.create(
+        detalle_obligacion=detalle,
+        orden=orden_actual,
+        nombre_original=titulo[:250],
+        tipo_archivo="TEXTO_CONFIDENCIAL",
+        tamano_bytes=len(observacion.encode("utf-8")),
+        titulo_evidencia=titulo[:300],
+        observacion_usuario=observacion,
+        metadatos_ligeros={"es_confidencial": True, "tag_semantico": "SOPORTE_CONFIDENCIAL_TEXTUAL"},
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "mensaje": f"Soporte escrito '{ev.nombre_original}' registrado con éxito.",
+        "evidencia": {
+            "id": ev.id,
+            "detalle_id": detalle.id,
+            "numero_obligacion": detalle.obligacion.numero_obligacion,
+            "nombre_original": ev.nombre_original,
+            "tipo_archivo": ev.tipo_archivo,
+            "es_imagen": False,
+            "es_confidencial": True,
+            "url": "",
+            "tamano_kb": round(ev.tamano_bytes / 1024, 1),
+            "observacion": ev.observacion_usuario,
+            "titulo": ev.titulo_evidencia,
+        },
+        "total_soportes": detalle.archivos_evidencia.count(),
     })
 
 
