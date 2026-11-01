@@ -245,6 +245,11 @@ def _inferir_contexto_clausula(
     }
 
 
+def _contraer_al(texto: str) -> str:
+    """Corrige la contracción castellana en frases ensambladas por plantillas."""
+    return re.sub(r"\ba el\b", "al", (texto or ""), flags=re.IGNORECASE)
+
+
 def _pulir_redaccion_local(texto: str) -> str:
     if not texto:
         return ""
@@ -610,12 +615,12 @@ def _distribuir_evidencias_balanceadas(informe, detalles_lista: List[Any]) -> Di
             pendientes_tematica.append(ev)
 
     # 3. Distribución en obligaciones VACÍAS (0 evidencias)
-    # Prioridad: obligaciones de soporte técnico y mantenimiento (7, 8, 5, 2, 4, 10, 11)
-    orden_preferente = [7, 8, 5, 2, 4, 10, 11] + [n for n in obs_nums if n not in (7, 8, 5, 2, 4, 10, 11)]
+    # Prioridad: obligaciones de soporte técnico y mantenimiento si existen en este contrato
+    orden_preferente = [n for n in [7, 8, 5, 2, 4, 10, 11] if n in obs_nums] + [n for n in obs_nums if n not in (7, 8, 5, 2, 4, 10, 11)]
 
     sobrantes = []
     for ev in pendientes_tematica:
-        vacias = [n for n in obs_nums if len(asignacion[n]) == 0]
+        vacias = [n for n in obs_nums if len(asignacion.get(n, [])) == 0]
         if vacias:
             candidata = next((n for n in orden_preferente if n in vacias), vacias[0])
             asignacion[candidata].append(ev)
@@ -624,14 +629,14 @@ def _distribuir_evidencias_balanceadas(informe, detalles_lista: List[Any]) -> Di
 
     # 4. Archivos sobrantes: Repartir equitativamente en obligaciones que solo tienen 1 evidencia
     for ev in sobrantes:
-        con_uno = [n for n in orden_preferente if len(asignacion[n]) == 1]
+        con_uno = [n for n in orden_preferente if len(asignacion.get(n, [])) == 1]
         if not con_uno:
-            con_uno = [n for n in obs_nums if len(asignacion[n]) == 1]
+            con_uno = [n for n in obs_nums if len(asignacion.get(n, [])) == 1]
         if con_uno:
             asignacion[con_uno[0]].append(ev)
         else:
             # Máximo 3 si el total de archivos excede 2N
-            con_dos = [n for n in obs_nums if len(asignacion[n]) < 3]
+            con_dos = [n for n in obs_nums if len(asignacion.get(n, [])) < 3]
             if con_dos:
                 asignacion[con_dos[0]].append(ev)
 

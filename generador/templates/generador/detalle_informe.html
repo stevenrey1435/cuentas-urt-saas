@@ -96,7 +96,7 @@
     </div>
 
     <!-- ZONA HERO: Carga y Redacción en 1 Clic -->
-    <div class="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">
         <div class="space-y-1">
             <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 block">
                 ✨ Generación en 1 Clic
@@ -110,7 +110,7 @@
         </div>
 
         <form action="{% url 'generador:generar_paquete_completo' informe.id %}" method="post" enctype="multipart/form-data"
-              onsubmit="activarModalProgreso('Organizando soportes y redactando tu cuenta de cobro...')"
+              onsubmit="const txt = (window._modoAccionClick === 'solo_acomodar_masivo') ? 'Desempaquetando archivos y abriendo visor de evidencias...' : 'Organizando soportes y redactando tu cuenta de cobro con IA...'; activarModalProgreso(txt);"
               class="space-y-4">
             {% csrf_token %}
 
@@ -145,16 +145,18 @@
                 </div>
             </div>
 
-            <!-- Botón Gigante y Sencillo -->
+            <!-- Botones de Acción: Flujo Claro y Minimalista -->
             <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <button type="submit" name="modo_accion" value="solo_acomodar_masivo"
-                        class="text-xs text-slate-400 hover:text-white transition order-2 sm:order-1">
-                    Solo organizar archivos (sin redactar)
+                        onclick="window._modoAccionClick='solo_acomodar_masivo'"
+                        class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 order-2 sm:order-1 cursor-pointer">
+                    <span>👁️ Cargar .ZIP y Abrir Visor de Evidencias</span>
                 </button>
 
-                <button type="submit" name="modo_accion" value="redactar_ia_y_empaquetar"
-                        class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-7 py-3 rounded-2xl text-sm shadow-lg shadow-emerald-950/50 transition flex items-center justify-center gap-2 order-1 sm:order-2">
-                    <span>✨ Generar Mi Cuenta de Cobro (.ZIP)</span>
+                <button type="submit" name="modo_accion" value="redactar_ia_y_empaquetar" id="btn-generar-cuenta-principal"
+                        onclick="window._modoAccionClick='redactar_ia_y_empaquetar'"
+                        class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-2 order-1 sm:order-2 cursor-pointer">
+                    <span>✨ Redactar Cuenta de Cobro con IA</span>
                 </button>
             </div>
         </form>
@@ -170,12 +172,12 @@
             <div class="flex flex-wrap items-center gap-2 text-xs">
                 <button type="button" onclick="abrirVisorEvidencia()"
                         id="btn-abrir-visor-global"
-                        class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
+                        class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
                     <span>👁️ Visor de Evidencias (<span id="total-evidencias-badge">{{ total_evidencias_informe }}</span>)</span>
                 </button>
                 <button type="button" onclick="guardarTodasObligacionesInforme()"
                         id="btn-guardar-todas-informe"
-                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
+                        class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs shadow-sm transition flex items-center gap-1">
                     <span>💾 Guardar Todas</span>
                 </button>
                 <button type="button" onclick="expandirTodasObligaciones(true)" class="text-slate-400 hover:text-white px-2 py-1 rounded-lg">Expandir</button>
@@ -199,7 +201,7 @@
                                 {{ det.obligacion.descripcion_clausula }}
                             </span>
                             <span class="text-[11px] text-slate-400">
-                                <span class="contador-soportes-{{ det.id }}">{{ det.archivos_evidencia.count }}</span> soportes {% if det.texto_tabla_principal %}• <span class="text-emerald-400 font-semibold">✓ Redactada</span>{% else %}• <span class="text-amber-400">Pendiente</span>{% endif %}
+                                <span class="contador-soportes-{{ det.id }}">{{ det.archivos_evidencia.count }}</span> soportes {% if det.texto_tabla_principal %}• <span class="text-emerald-400 font-semibold">✓ Redactada</span>{% else %}• <span class="text-slate-500">Pendiente</span>{% endif %}
                             </span>
                         </div>
                     </div>
@@ -227,7 +229,7 @@
                                 <label class="text-xs font-bold text-emerald-400">Texto Oficial para tu Cuenta y Reporte Mensual</label>
                                 <button type="submit"
                                         formaction="{% url 'generador:regenerar_obligacion_individual' det.id %}"
-                                        class="text-xs text-amber-300 hover:text-amber-200 transition">
+                                        class="text-xs text-slate-400 hover:text-emerald-400 transition">
                                     ✨ Pulir redacción con IA
                                 </button>
                             </div>
@@ -247,7 +249,7 @@
                                     </span>
                                     {% if det.archivos_evidencia.all %}
                                     <button type="button" onclick="abrirVisorEvidencia(null, {{ det.obligacion.numero_obligacion }})"
-                                            class="bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold px-2 py-0.5 rounded-lg text-[11px] transition flex items-center gap-1">
+                                            class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold px-2.5 py-0.5 rounded-lg text-[11px] transition flex items-center gap-1">
                                         <span>👁️ Visor 1 a 1</span>
                                     </button>
                                     {% endif %}
@@ -263,7 +265,7 @@
                                 <div id="fila-evidencia-{{ ev.id }}" class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group">
                                     <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia({{ ev.id }})" title="Clic para abrir en visor y agregar observación">
                                         {% if ev.es_confidencial_sin_archivo %}
-                                        <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400 font-bold text-xs" title="Soporte Confidencial / Escrito">
+                                        <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-300 font-bold text-xs" title="Soporte Confidencial / Escrito">
                                             🔒
                                         </div>
                                         {% elif ev.es_imagen and ev.url_archivo %}
@@ -277,9 +279,9 @@
                                             <div class="flex items-center gap-1.5">
                                                 <span class="font-semibold text-slate-200 truncate">{{ ev.nombre_original }}</span>
                                                 {% if ev.es_confidencial_sin_archivo %}
-                                                <span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
+                                                <span class="text-[9px] bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
                                                 {% endif %}
-                                                <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                                                <span class="text-[10px] text-slate-400 group-hover:text-emerald-400">👁️ Abrir</span>
                                             </div>
                                             <p id="snippet-obs-{{ ev.id }}" class="text-[11px] text-slate-400 truncate mt-0.5">
                                                 {% if ev.observacion_usuario %}
@@ -294,11 +296,11 @@
                                     </div>
                                     <div class="flex items-center gap-1.5 shrink-0">
                                         <button type="button" onclick="abrirVisorEvidencia({{ ev.id }})"
-                                                title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                                                title="Editar observación para la IA" class="text-slate-300 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                                             ✏️ Nota IA
                                         </button>
                                         <button type="button" onclick="eliminarSoporteIndividualAJAX({{ ev.id }}, {{ det.id }}, '{{ ev.nombre_original|escapejs }}')"
-                                                title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                                                title="Quitar soporte" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                                             ✕
                                         </button>
                                     </div>
@@ -313,7 +315,7 @@
                                            onchange="subirSoporteIndividualInmediato(this, {{ det.id }})"
                                            class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:bg-slate-800 file:text-slate-200 cursor-pointer">
                                     <button type="button" onclick="abrirModalEvidenciaEscrita({{ det.id }}, {{ det.obligacion.numero_obligacion }})"
-                                            class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/50 hover:bg-indigo-900/50 transition flex items-center gap-1 shrink-0">
+                                            class="text-[11px] text-slate-300 hover:text-white font-semibold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition flex items-center gap-1 shrink-0">
                                         <span>📝 + Soporte Escrito (Confidencial)</span>
                                     </button>
                                 </div>
@@ -439,7 +441,7 @@
         <!-- Header -->
         <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-3.5 flex items-center justify-between gap-3">
             <div class="flex items-center gap-2.5">
-                <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+                <span class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 font-extrabold text-xs flex items-center justify-center shrink-0">
                     📝
                 </span>
                 <div>
@@ -456,8 +458,8 @@
         <form id="form-evidencia-escrita" onsubmit="enviarEvidenciaEscritaAJAX(event)" class="p-5 space-y-4 text-xs">
             <input type="hidden" id="escrita-detalle-id" value="">
             
-            <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1 text-slate-300">
-                <p class="font-bold text-amber-400 text-[11px] flex items-center gap-1">
+            <div class="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1 text-slate-300">
+                <p class="font-bold text-slate-200 text-[11px] flex items-center gap-1">
                     <span>🔒</span> Reserva Legal y Confidencialidad (Ley 1712 de 2014)
                 </p>
                 <p class="text-[11px] text-slate-400">
@@ -469,14 +471,14 @@
                 <label class="font-bold text-slate-200 block">Título Técnico del Soporte:</label>
                 <input type="text" id="escrita-titulo" required
                        placeholder="Ej: Acta de pruebas técnicas en base de datos interna URT"
-                       class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none">
+                       class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none">
             </div>
 
             <div class="space-y-1">
                 <label class="font-bold text-slate-200 block">Descripción Detallada de la Actividad (para la IA):</label>
                 <textarea id="escrita-observacion" rows="4" required
                           placeholder="Describe qué hiciste, en qué entorno, con quién te reuniste o qué componentes verificaste..."
-                          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none"></textarea>
+                          class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"></textarea>
             </div>
 
             <div class="flex items-center justify-between pt-2 border-t border-slate-800">
@@ -487,7 +489,7 @@
                         Cancelar
                     </button>
                     <button type="submit" id="btn-submit-escrita"
-                            class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow transition flex items-center gap-1">
+                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow transition flex items-center gap-1">
                         <span>💾 Registrar Soporte</span>
                     </button>
                 </div>
@@ -502,7 +504,7 @@
         <!-- Header -->
         <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-3.5 flex items-center justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
-                <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-xs flex items-center justify-center shrink-0">
+                <span class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 font-extrabold text-xs flex items-center justify-center shrink-0">
                     👁️
                 </span>
                 <div class="min-w-0">
@@ -519,13 +521,17 @@
             <div class="flex items-center gap-2">
                 <!-- Dropdown de filtro por obligación -->
                 <select id="visor-filtro-ob" onchange="cambiarFiltroObligacionVisor(this.value)"
-                        class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500">
+                        class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500">
                     <option value="todas">Todas las Obligaciones</option>
                     {% for det in detalles %}
                     <option value="{{ det.obligacion.numero_obligacion }}">Ob. {{ det.obligacion.numero_obligacion }} ({{ det.archivos_evidencia.count }} soportes)</option>
                     {% endfor %}
                 </select>
 
+                <button type="button" onclick="cerrarVisorEvidencia(); document.getElementById('btn-generar-cuenta-principal')?.click();"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+                    <span>✨ Redactar con IA</span>
+                </button>
                 <button type="button" onclick="cerrarVisorEvidencia()"
                         class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition text-sm">
                     ✕
@@ -539,7 +545,7 @@
             <div class="lg:col-span-7 flex flex-col gap-3 min-w-0">
                 <div class="flex items-center justify-between text-xs text-slate-400">
                     <span id="visor-contador-slide" class="font-bold text-emerald-400">Evidencia 1 de 17</span>
-                    <span id="visor-ob-tag" class="text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded-lg border border-indigo-900/60">Obligación 1</span>
+                    <span id="visor-ob-tag" class="text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700 font-medium">Obligación 1</span>
                 </div>
 
                 <div id="visor-preview-box" class="bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center p-3 relative min-h-[320px] max-h-[460px] overflow-hidden group">
@@ -632,6 +638,19 @@
 
 <script>
 
+    // Abrir automáticamente el visor de evidencias si viene del desempaquetado de .ZIP
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('abrir_visor') === '1') {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setTimeout(() => {
+                abrirVisorEvidencia();
+                mostrarToast('✓ Evidencias listas. Revisa tus archivos y coloca tus observaciones antes de redactar.');
+            }, 250);
+        }
+    });
+
+
     // ==========================================
     // MODAL DE TÉRMINOS ANTES DE DESCARGAR ZIP
     // ==========================================
@@ -695,7 +714,7 @@
 
         if (!titulo || !observacion) return;
 
-        statusEl.innerHTML = '<span class="text-amber-400">⏳ Registrando...</span>';
+        statusEl.innerHTML = '<span class="text-slate-300">⏳ Registrando...</span>';
         btnSubmit.disabled = true;
 
         try {
@@ -728,14 +747,14 @@
                     divHtml.className = 'bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group';
                     divHtml.innerHTML = `
                         <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia(${ev.id})" title="Clic para abrir en visor y agregar observación">
-                            <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400 font-bold text-xs" title="Soporte Confidencial / Escrito">
+                            <div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-300 font-bold text-xs" title="Soporte Confidencial / Escrito">
                                 🔒
                             </div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-semibold text-slate-200 truncate">${nombreEscapado}</span>
-                                    <span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
-                                    <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                                    <span class="text-[9px] bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.2 rounded font-semibold shrink-0">Confidencial</span>
+                                    <span class="text-[10px] text-slate-400 group-hover:text-emerald-400">👁️ Abrir</span>
                                 </div>
                                 <p id="snippet-obs-${ev.id}" class="text-[11px] text-slate-400 truncate mt-0.5">
                                     <span class="text-emerald-400 font-medium">📝 ${obsEscapada}</span>
@@ -744,11 +763,11 @@
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
                             <button type="button" onclick="abrirVisorEvidencia(${ev.id})"
-                                    title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                                    title="Editar observación para la IA" class="text-slate-300 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                                 ✏️ Nota IA
                             </button>
                             <button type="button" onclick="eliminarSoporteIndividualAJAX(${ev.id}, ${detalleId}, '${nombreJs}')"
-                                    title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                                    title="Quitar soporte" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                                 ✕
                             </button>
                         </div>
@@ -770,7 +789,7 @@
                 throw new Error(data.error || 'Error al registrar soporte');
             }
         } catch (err) {
-            statusEl.innerHTML = `<span class="text-rose-400 font-semibold">${err.message}</span>`;
+            statusEl.innerHTML = `<span class="text-slate-300 font-semibold">${err.message}</span>`;
         } finally {
             btnSubmit.disabled = false;
         }
@@ -839,7 +858,7 @@
     function visorObservacionModificada() {
         observacionModificada = true;
         const statusEl = document.getElementById('visor-status-save');
-        statusEl.innerHTML = '<span class="text-amber-400">✏️ Cambios sin guardar...</span>';
+        statusEl.innerHTML = '<span class="text-slate-400">✏️ Cambios sin guardar...</span>';
     }
 
     function renderSlideActual() {
@@ -881,11 +900,11 @@
             btnDescargar.classList.add('hidden');
             pBox.innerHTML = `
                 <div class="text-center p-6 space-y-3 max-w-md">
-                    <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl font-bold text-amber-400">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-3xl font-bold text-slate-300">
                         🔒
                     </div>
                     <div>
-                        <span class="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase">Soporte Confidencial / Escrito</span>
+                        <span class="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-0.5 rounded-full font-bold uppercase">Soporte Confidencial / Escrito</span>
                         <p class="text-xs font-bold text-white break-all mt-2">${ev.nombre_original}</p>
                         <p class="text-[11px] text-slate-400 mt-1">Soporte documental registrado sin adjunto gráfico en observancia de la reserva legal y protección de datos (Ley 1712 de 2014). La IA utiliza tu descripción para argumentar el informe formal.</p>
                     </div>
@@ -911,7 +930,7 @@
                         <p class="text-xs font-bold text-white break-all">${ev.nombre_original}</p>
                         <p class="text-[11px] text-slate-400 mt-0.5">Soporte tipo ${ev.tipo_archivo} (${ev.tamano_kb} KB)</p>
                     </div>
-                    ${ev.url ? `<a href="${ev.url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline">Descargar o Abrir Archivo Original ↗</a>` : ''}
+                    ${ev.url ? `<a href="${ev.url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 font-semibold underline">Descargar o Abrir Archivo Original ↗</a>` : ''}
                 </div>
             `;
         }
@@ -944,7 +963,7 @@
         const statusEl = document.getElementById('visor-status-save');
         const btnGuardar = document.getElementById('btn-guardar-obs-visor');
 
-        statusEl.innerHTML = '<span class="text-amber-400">⏳ Guardando...</span>';
+        statusEl.innerHTML = '<span class="text-slate-300">⏳ Guardando...</span>';
         btnGuardar.disabled = true;
 
         try {
@@ -979,7 +998,7 @@
                 throw new Error(data.error || 'Error al guardar observación');
             }
         } catch (err) {
-            statusEl.innerHTML = `<span class="text-rose-400 font-semibold">Error: ${err.message}</span>`;
+            statusEl.innerHTML = `<span class="text-slate-300 font-semibold">Error: ${err.message}</span>`;
         } finally {
             btnGuardar.disabled = false;
         }
@@ -1057,18 +1076,18 @@
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5">
                                 <span class="font-semibold text-slate-200 truncate">${nombreEscapado}</span>
-                                <span class="text-[10px] text-indigo-400 group-hover:underline">👁️ Abrir</span>
+                                <span class="text-[10px] text-slate-400 group-hover:text-emerald-400">👁️ Abrir</span>
                             </div>
                             <p id="snippet-obs-${ev.id}" class="text-[11px] text-slate-400 truncate mt-0.5">${obsSnippet}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
                         <button type="button" onclick="abrirVisorEvidencia(${ev.id})"
-                                title="Editar observación para la IA" class="text-indigo-400 hover:text-indigo-300 text-xs px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 transition">
+                                title="Editar observación para la IA" class="text-slate-300 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                             ✏️ Nota IA
                         </button>
                         <button type="button" onclick="eliminarSoporteIndividualAJAX(${ev.id}, ${detalleId}, '${nombreJs}')"
-                                title="Quitar soporte" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 transition">
+                                title="Quitar soporte" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition">
                             ✕
                         </button>
                     </div>

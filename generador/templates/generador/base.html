@@ -64,7 +64,7 @@
             
             <!-- Logo Simple y Claro -->
             <a href="{% url 'generador:dashboard' %}" class="flex items-center gap-2.5 group">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-emerald-900/20 group-hover:scale-105 transition">
+                <div class="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-emerald-900/20 group-hover:scale-105 transition">
                     CD
                 </div>
                 <div>
@@ -114,7 +114,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="salir">
                     <button type="submit" title="Cerrar sesión"
-                            class="text-xs font-medium text-slate-400 hover:text-rose-400 px-2 py-1.5 rounded-xl transition">
+                            class="text-xs font-medium text-slate-400 hover:text-white px-2 py-1.5 rounded-xl transition">
                         Salir
                     </button>
                 </form>
@@ -139,10 +139,8 @@
     <div class="max-w-5xl mx-auto w-full px-4 sm:px-6 mt-4 space-y-2">
         {% for message in messages %}
         <div class="px-4 py-2.5 rounded-2xl border text-xs sm:text-sm flex items-center justify-between shadow-sm transition
-            {% if message.tags == 'error' %}bg-rose-950/80 border-rose-500/40 text-rose-200
-            {% elif message.tags == 'warning' %}bg-amber-950/80 border-amber-500/40 text-amber-200
-            {% elif message.tags == 'success' %}bg-emerald-950/80 border-emerald-500/40 text-emerald-200
-            {% else %}bg-sky-950/80 border-sky-500/40 text-sky-200{% endif %}">
+            {% if message.tags == 'success' %}bg-emerald-950/80 border-emerald-500/40 text-emerald-200
+            {% else %}bg-slate-900 border-slate-700 text-slate-200{% endif %}">
             <span class="flex items-center gap-2">
                 {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% else %}ℹ{% endif %}
                 {{ message }}
@@ -339,7 +337,7 @@
             <!-- Header -->
             <div class="bg-slate-950/90 border-b border-slate-800 px-5 py-4 flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-extrabold text-sm flex items-center justify-center shrink-0">
+                    <span class="w-8 h-8 rounded-xl bg-slate-800 text-slate-200 font-extrabold text-sm flex items-center justify-center shrink-0">
                         📖
                     </span>
                     <div>
@@ -376,12 +374,12 @@
                             <p class="text-[11px] text-slate-400">Sube tus soportes (.ZIP, capturas, PDFs) o registra <em>evidencias escritas</em> si tus actividades involucran datos reservados o sensibles.</p>
                         </div>
                         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
-                            <span class="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-extrabold text-[11px] flex items-center justify-center">2</span>
+                            <span class="w-6 h-6 rounded-lg bg-slate-800 text-slate-200 font-extrabold text-[11px] flex items-center justify-center">2</span>
                             <p class="font-bold text-white text-xs">Generación con IA</p>
                             <p class="text-[11px] text-slate-400">La IA redacta en pretérito formal impersonal con rigor técnico de auditoría, distribuyendo evidencias equitativamente entre las obligaciones.</p>
                         </div>
                         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
-                            <span class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 font-extrabold text-[11px] flex items-center justify-center">3</span>
+                            <span class="w-6 h-6 rounded-lg bg-slate-800 text-slate-200 font-extrabold text-[11px] flex items-center justify-center">3</span>
                             <p class="font-bold text-white text-xs">Revisa y Descarga</p>
                             <p class="text-[11px] text-slate-400">Afina notas en el Visor 1 a 1, revisa la redacción y descarga tu paquete .ZIP con los 2N+2 documentos Word (.docx) listos.</p>
                         </div>
@@ -403,8 +401,8 @@
                     </div>
 
                     <!-- A qué NO se compromete -->
-                    <div class="bg-rose-950/20 border border-rose-900/50 rounded-xl p-4 space-y-2">
-                        <h4 class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <h4 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                             <span>⚠</span> A qué NO se compromete (Exención)
                         </h4>
                         <ul class="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">

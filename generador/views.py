@@ -257,6 +257,7 @@ def detalle_informe(request, informe_id: int):
         informe.contratista.pases_disponibles <= 0
         and informe.estado == "BORRADOR"
         and not getattr(settings, "LOCAL_ONLY_AI", False)
+        and not request.GET.get("abrir_visor")
     ):
         messages.warning(
             request,
@@ -336,13 +337,6 @@ def guardar_datos_generales_informe(request, informe_id: int):
         contratista=contratista_sesion,
     )
 
-    # Capa de Defensa 1: Si no tiene pases disponibles y el informe nunca se ha generado
-    if informe.contratista.pases_disponibles <= 0 and informe.estado == "BORRADOR":
-        messages.warning(
-            request,
-            "⚡ No tienes Pases activos para generar esta cuenta. Haz clic en '⚡ Recargar Pases' para solicitar tu código de activación por WhatsApp.",
-        )
-        return redirect("generador:detalle_informe", informe_id=informe.id)
     mes = request.POST.get("mes")
     if mes:
         informe.mes = int(mes)
@@ -739,14 +733,21 @@ def generar_paquete_completo_view(request, informe_id: int):
         contratista=contratista_sesion,
     )
 
-    # Capa de Defensa 1: Si no tiene pases disponibles y el informe nunca se ha generado
-    if informe.contratista.pases_disponibles <= 0 and informe.estado == "BORRADOR":
+    modo = request.POST.get("modo_accion", "ensamblar_y_redactar")
+
+    # Capa de Defensa: La verificación de pases SOLO se exige al momento de redactar y generar el paquete con IA.
+    # Cargar el .ZIP, organizar evidencias y abrir el visor es libre para preparar el informe.
+    if (
+        modo == "redactar_ia_y_empaquetar"
+        and informe.contratista.pases_disponibles <= 0
+        and informe.estado == "BORRADOR"
+        and not getattr(settings, "LOCAL_ONLY_AI", False)
+    ):
         messages.warning(
             request,
             "⚡ No tienes Pases activos para generar esta cuenta. Haz clic en '⚡ Recargar Pases' para solicitar tu código de activación por WhatsApp.",
         )
         return redirect("generador:detalle_informe", informe_id=informe.id)
-    modo = request.POST.get("modo_accion", "ensamblar_y_redactar")
     apuntes_generales = (request.POST.get("apuntes_generales_mes") or "").strip()
     nota_masiva = (request.POST.get("nota_evidencias_masivas") or "").strip()
     archivos_masivos_raw = request.FILES.getlist("archivos_masivos")
@@ -858,16 +859,16 @@ def generar_paquete_completo_view(request, informe_id: int):
                 f"⚠️ Atención: Las obligaciones {obligaciones_invalidas} tienen textos demasiado cortos o de prueba (ej. 'primer', 'segundo') que no corresponden a cláusulas reales. Actualízalas en tu perfil para que la IA valide la afinidad real con tus evidencias.",
             )
 
-        if modo == "solo_acomodar_masivo":
+        if modo in ("solo_acomodar_masivo", "cargar_y_abrir_visor"):
             resumen_corto = ", ".join(resumen_acomodo[:8])
             if len(resumen_acomodo) > 8:
                 resumen_corto += f" y {len(resumen_acomodo) - 8} más"
-            detalle_msg = f"{len(resumen_acomodo)} archivos clasificados ({resumen_corto})" if resumen_acomodo else "Apuntes distribuidos en las obligaciones."
+            detalle_msg = f"{len(resumen_acomodo)} archivos clasificados ({resumen_corto})" if resumen_acomodo else "Archivos organizados en tus obligaciones."
             messages.success(
                 request,
-                f"¡Evidencias desempaquetadas y acomodadas automáticamente en tus obligaciones! {detalle_msg}. "
-                f"Revisa abajo cómo quedaron o haz clic en 'Redactar Todo con IA + Generar ZIP'.",
+                f"✓ {detalle_msg}. Revisa tus evidencias en el visor y agrega tus observaciones antes de redactar.",
             )
+            return redirect(f"/informes/{informe.id}/?abrir_visor=1")
         elif modo == "redactar_ia_y_empaquetar":
             res_ia = redactar_informe_con_ia(
                 informe,

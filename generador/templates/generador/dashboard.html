@@ -192,7 +192,7 @@
                             💾 Guardar
                         </button>
                         <button type="button" onclick="eliminarObligacionIndividual({{ ob.id }}, {{ ob.numero_obligacion }})"
-                                class="text-[11px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded-lg transition">
+                                class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 px-2 py-0.5 rounded-lg transition">
                             ✕
                         </button>
                     </div>
@@ -236,8 +236,8 @@
                             </span>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full
                                 {% if inf.estado == 'EMPAQUETADO' %}bg-emerald-500/20 text-emerald-300
-                                {% elif inf.estado == 'REDACTADO_IA' %}bg-sky-500/20 text-sky-300
-                                {% else %}bg-amber-500/20 text-amber-300{% endif %}">
+                                {% elif inf.estado == 'REDACTADO_IA' %}bg-slate-800 text-slate-200 border border-slate-700
+                                {% else %}bg-slate-800 text-slate-400 border border-slate-700{% endif %}">
                                 {{ inf.get_estado_display }}
                             </span>
                         </div>
@@ -452,7 +452,7 @@
                                 💾 Guardar
                             </button>
                             <button type="button" onclick="eliminarObligacionIndividual(${ob.id}, ${ob.numero})"
-                                    class="text-[11px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 px-2 py-0.5 rounded-lg transition">
+                                    class="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 px-2 py-0.5 rounded-lg transition">
                                 ✕
                             </button>
                         </div>
