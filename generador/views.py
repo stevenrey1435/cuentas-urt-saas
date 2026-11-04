@@ -293,13 +293,22 @@ def detalle_informe(request, informe_id: int):
     request.session["contratista_activo_id"] = contratista.id
 
     todas_evidencias_data = []
+    total_pendientes = 0
     for det in detalles:
+        evs_clasificadas = []
         for ev in det.archivos_evidencia.all():
+            es_pendiente = (ev.descripcion_tecnica_ia == "PENDIENTE_CLASIFICACION_IA")
+            if es_pendiente:
+                total_pendientes += 1
+            else:
+                evs_clasificadas.append(ev)
+
             todas_evidencias_data.append({
                 "id": ev.id,
                 "detalle_id": det.id,
                 "numero_obligacion": det.obligacion.numero_obligacion,
-                "clausula_corta": (det.obligacion.descripcion_clausula[:80] + "...") if len(det.obligacion.descripcion_clausula) > 80 else det.obligacion.descripcion_clausula,
+                "es_pendiente": es_pendiente,
+                "clausula_corta": "Pendiente de clasificar con IA" if es_pendiente else ((det.obligacion.descripcion_clausula[:80] + "...") if len(det.obligacion.descripcion_clausula) > 80 else det.obligacion.descripcion_clausula),
                 "nombre_original": ev.nombre_original,
                 "tipo_archivo": ev.tipo_archivo,
                 "es_imagen": ev.es_imagen,
@@ -309,6 +318,7 @@ def detalle_informe(request, informe_id: int):
                 "observacion": getattr(ev, "observacion_usuario", "") or "",
                 "titulo": ev.titulo_evidencia or "",
             })
+        det.evidencias_clasificadas_lista = evs_clasificadas
 
     context = {
         "informe": informe,
@@ -320,6 +330,7 @@ def detalle_informe(request, informe_id: int):
         "meses_choices": InformeMensual.MESES_CHOICES,
         "todas_evidencias_json": json.dumps(todas_evidencias_data),
         "total_evidencias_informe": len(todas_evidencias_data),
+        "total_evidencias_pendientes": total_pendientes,
     }
     return render(request, "generador/detalle_informe.html", context)
 
@@ -694,12 +705,20 @@ def reacomodar_todas_evidencias_informe(informe: InformeMensual, detalles_lista:
             detalles_lista,
             indice_rotacion=idx,
         )
-        if det_destino and det_destino.id != det_actual.id:
-            ev.detalle_obligacion = det_destino
-            ev.save()
-            movimientos.append(
-                f"'{ev.nombre_original}' reasignado: Ob. {det_actual.obligacion.numero_obligacion} → Ob. {det_destino.obligacion.numero_obligacion}"
-            )
+        if not det_destino and detalles_lista:
+            det_destino = detalles_lista[0]
+
+        if det_destino:
+            cambio_ob = (det_destino.id != det_actual.id)
+            era_pendiente = (ev.descripcion_tecnica_ia == "PENDIENTE_CLASIFICACION_IA")
+            if cambio_ob or era_pendiente:
+                ev.detalle_obligacion = det_destino
+                if era_pendiente:
+                    ev.descripcion_tecnica_ia = ""
+                ev.save()
+                movimientos.append(
+                    f"'{ev.nombre_original}' asignado: Ob. {det_destino.obligacion.numero_obligacion}"
+                )
 
     # Re-enumerar el orden secuencial de evidencias por obligación (1..N)
     for det in detalles_lista:
@@ -715,12 +734,16 @@ def reacomodar_todas_evidencias_informe(informe: InformeMensual, detalles_lista:
 @require_POST
 def generar_paquete_completo_view(request, informe_id: int):
     """
-    Recibe opcionalmente la carga masiva de archivos (`archivos_masivos`, incluyendo cualquier `.zip` con
-    imágenes, PDFs, Word, Excels, `.py`, `.sql`, etc.) y apuntes/commits generales del mes (`apuntes_generales_mes`),
-    desempaqueta automáticamente los `.zip` ignorando `Thumbs.db` y archivos basura, acomoda cada archivo
-    y apunte en la obligación K (1..N) más afín según la cláusula contractual, y si
-    `modo_accion == 'redactar_ia_y_empaquetar'`, ejecuta la llamada Single-Shot al Agente IA para redactar las N
-    obligaciones y construir el árbol de carpetas + los 2N+2 documentos `.docx` + `.zip`.
+    Flujo en 2 Fases:
+    - Modo 'solo_acomodar_masivo' (Cargar .ZIP y Abrir Visor):
+      0% IA, 0 Tokens, CERO gasto de pases.
+      Si el informe está en BORRADOR (no redactado aún), limpia evidencias previas del borrador.
+      Si ya fue redactado con IA previamente, conserva las anteriores intactas y anexa las nuevas.
+      Desempaqueta las evidencias y las coloca en la bandeja general (sin clasificar en obligaciones).
+      Redirige de inmediato al Visor de Evidencias 1 a 1 para que el contratista agregue sus notas.
+    - Modo 'redactar_ia_y_empaquetar' (Redactar Cuenta con IA):
+      AQUÍ SÍ entra la IA: Toma las notas de cada evidencia del visor, asigna y balancea cada soporte
+      a su obligación correspondiente, redacta las actividades oficiales GC-FO-15 y genera el ZIP.
     """
     contratista_sesion = _obtener_contratista_activo(request)
     if not contratista_sesion:
@@ -734,9 +757,24 @@ def generar_paquete_completo_view(request, informe_id: int):
     )
 
     modo = request.POST.get("modo_accion", "ensamblar_y_redactar")
+    apuntes_generales = (request.POST.get("apuntes_generales_mes") or "").strip()
+    nota_masiva = (request.POST.get("nota_evidencias_masivas") or "").strip()
+    archivos_masivos_raw = request.FILES.getlist("archivos_masivos")
 
-    # Capa de Defensa: La verificación de pases SOLO se exige al momento de redactar y generar el paquete con IA.
-    # Cargar el .ZIP, organizar evidencias y abrir el visor es libre para preparar el informe.
+    detalles_lista = list(
+        informe.detalles_obligaciones.select_related("obligacion")
+        .prefetch_related("archivos_evidencia")
+        .order_by("obligacion__numero_obligacion")
+    )
+
+    # Identificar si el informe ya fue generado previamente con IA
+    informe_ya_generado = (
+        informe.estado in ("REDACTADO_IA", "EMPAQUETADO")
+        or bool(informe.archivo_zip_generado)
+        or any(bool((det.texto_tabla_principal or "").strip()) for det in detalles_lista)
+    )
+
+    # Capa de Defensa: La verificación de pases SOLO aplica al momento de redactar y generar con IA
     if (
         modo == "redactar_ia_y_empaquetar"
         and informe.contratista.pases_disponibles <= 0
@@ -748,154 +786,160 @@ def generar_paquete_completo_view(request, informe_id: int):
             "⚡ No tienes Pases activos para generar esta cuenta. Haz clic en '⚡ Recargar Pases' para solicitar tu código de activación por WhatsApp.",
         )
         return redirect("generador:detalle_informe", informe_id=informe.id)
-    apuntes_generales = (request.POST.get("apuntes_generales_mes") or "").strip()
-    nota_masiva = (request.POST.get("nota_evidencias_masivas") or "").strip()
-    archivos_masivos_raw = request.FILES.getlist("archivos_masivos")
-
-    detalles_lista = list(
-        informe.detalles_obligaciones.select_related("obligacion")
-        .prefetch_related("archivos_evidencia")
-        .order_by("obligacion__numero_obligacion")
-    )
 
     try:
-        resumen_acomodo = []
-
-        # La carga de embeddings puede consumir cientos de MB y descargar el modelo
-        # durante la primera petición. En Render se mantiene desactivada salvo que
-        # LOCAL_SEMANTIC_ENABLED=True se configure explícitamente.
-        if not getattr(settings, "LOCAL_SEMANTIC_ENABLED", False):
-            from .services import semantic_matcher
-            semantic_matcher._obtener_modelo.cache_clear()
-
-        # 0. Si había algún .zip crudo guardado previamente en la BD, desempaquetarlo primero
-        resumen_acomodo.extend(_desempacar_zips_pendientes_en_informe(informe, detalles_lista))
-
-        # 1. Si el contratista pegó apuntes/commits generales del mes, distribuir cada línea en su obligación más afín
-        if apuntes_generales and detalles_lista:
-            lineas_apuntes = [ln.strip() for ln in apuntes_generales.splitlines() if ln.strip()]
-            for idx_ln, linea in enumerate(lineas_apuntes):
-                det_destino = clasificar_obligacion_por_afinidad(linea, detalles_lista, indice_rotacion=idx_ln)
-                if det_destino:
-                    actual = (det_destino.apuntes_contratista or "").strip()
-                    if linea not in actual:
-                        nuevo_txt = f"{actual}\n{linea}".strip() if actual else linea
-                        det_destino.apuntes_contratista = nuevo_txt[: informe.contratista.max_caracteres_apuntes]
-                        det_destino.save()
-
-        # 2. Si el contratista subió evidencias en bloque o un archivo .ZIP, desempaquetar, filtrar Thumbs.db y clasificar
-        items_desempacados = desempacar_archivos_subidos(archivos_masivos_raw)
-        
-        # Mapa de evidencias existentes en este informe para deduplicación estricta (cero duplicados)
-        mapa_existentes = {
-            ev.nombre_original.strip().lower(): ev
-            for det in detalles_lista
-            for ev in det.archivos_evidencia.all()
-        }
-
-        for idx_f, item in enumerate(items_desempacados):
-            f_obj = item["file_obj"]
-            nombre_orig = item["nombre_original"]
-            nombre_key = nombre_orig.strip().lower()
-            ruta_rel = item["ruta_relativa"]
-            tamano = item["tamano_bytes"]
-            tipo = clasificar_tipo_archivo(nombre_orig)
-            metadatos = extraer_metadatos_ligeros_archivo(f_obj, nombre_orig, ruta_relativa=ruta_rel)
-            if hasattr(f_obj, "seek"):
-                f_obj.seek(0)
-
-            pista_semantica = f"{ruta_rel} {nombre_orig} {nota_masiva} {metadatos}"
-            det_destino = clasificar_obligacion_por_afinidad(pista_semantica, detalles_lista, indice_rotacion=idx_f)
-            if not det_destino and detalles_lista:
-                det_destino = detalles_lista[0]
-
-            if det_destino:
-                if nombre_key in mapa_existentes:
-                    # El archivo ya existe: actualizar su obligación destino y metadatos sin duplicar
-                    ev_existente = mapa_existentes[nombre_key]
-                    if ev_existente.detalle_obligacion_id != det_destino.id:
-                        ev_existente.detalle_obligacion = det_destino
-                    ev_existente.metadatos_ligeros = metadatos
-                    if nota_masiva:
-                        ev_existente.titulo_evidencia = nota_masiva
-                    ev_existente.save()
-                    resumen_acomodo.append(f"'{nombre_orig}' (actualizado) → Obligación {det_destino.obligacion.numero_obligacion}")
-                else:
-                    orden_actual = det_destino.archivos_evidencia.count() + 1
-                    ev = ArchivoEvidencia(
-                        detalle_obligacion=det_destino,
-                        orden=orden_actual,
-                        nombre_original=nombre_orig,
-                        tipo_archivo=tipo,
-                        tamano_bytes=tamano,
-                        titulo_evidencia=nota_masiva or f"Soporte Técnico Obligación {det_destino.obligacion.numero_obligacion} ({nombre_orig})",
-                        descripcion_tecnica_ia="",
-                        metadatos_ligeros=metadatos,
-                    )
-                    ev.archivo.save(nombre_orig, f_obj, save=True)
-                    mapa_existentes[nombre_key] = ev
-                    resumen_acomodo.append(f"'{nombre_orig}' → Obligación {det_destino.obligacion.numero_obligacion}")
-
-        # 3. Reasignar y optimizar la distribución de TODAS las evidencias del informe
-        movimientos_reasignacion = reacomodar_todas_evidencias_informe(informe, detalles_lista)
-        if movimientos_reasignacion:
-            resumen_acomodo.extend(movimientos_reasignacion)
-            # Refrescar detalles_lista con las evidencias reasignadas en BD
-            detalles_lista = list(
-                informe.detalles_obligaciones.select_related("obligacion")
-                .prefetch_related("archivos_evidencia")
-                .order_by("obligacion__numero_obligacion")
-            )
-
-        # Validar que las obligaciones no sean textos de prueba vacíos ('primer', 'segundo', etc.)
-        obligaciones_invalidas = [
-            det.obligacion.numero_obligacion
-            for det in detalles_lista
-            if len((det.obligacion.descripcion_clausula or "").strip()) < 20
-        ]
-        if obligaciones_invalidas and modo == "redactar_ia_y_empaquetar":
-            messages.warning(
-                request,
-                f"⚠️ Atención: Las obligaciones {obligaciones_invalidas} tienen textos demasiado cortos o de prueba (ej. 'primer', 'segundo') que no corresponden a cláusulas reales. Actualízalas en tu perfil para que la IA valide la afinidad real con tus evidencias.",
-            )
-
+        # =========================================================================
+        # FASE 1: CARGA DE .ZIP Y APERTURA DE VISOR (0% IA, 0 TOKENS, SIN ASIGNAR)
+        # =========================================================================
         if modo in ("solo_acomodar_masivo", "cargar_y_abrir_visor"):
-            resumen_corto = ", ".join(resumen_acomodo[:8])
-            if len(resumen_acomodo) > 8:
-                resumen_corto += f" y {len(resumen_acomodo) - 8} más"
-            detalle_msg = f"{len(resumen_acomodo)} archivos clasificados ({resumen_corto})" if resumen_acomodo else "Archivos organizados en tus obligaciones."
-            messages.success(
-                request,
-                f"✓ {detalle_msg}. Revisa tus evidencias en el visor y agrega tus observaciones antes de redactar.",
-            )
+            if archivos_masivos_raw:
+                # Regla de Oro: Si aún NO se ha generado con IA (BORRADOR), limpiar evidencias previas
+                if not informe_ya_generado:
+                    evs_previas = list(ArchivoEvidencia.objects.filter(detalle_obligacion__informe=informe))
+                    for ev_ant in evs_previas:
+                        if ev_ant.archivo:
+                            try:
+                                ev_ant.archivo.delete(save=False)
+                            except Exception:
+                                pass
+                    ArchivoEvidencia.objects.filter(detalle_obligacion__informe=informe).delete()
+
+                items_desempacados = desempacar_archivos_subidos(archivos_masivos_raw)
+                nombres_existentes = set(
+                    ev.nombre_original.strip().lower()
+                    for ev in ArchivoEvidencia.objects.filter(detalle_obligacion__informe=informe)
+                )
+
+                det_bandeja = detalles_lista[0] if detalles_lista else None
+                nuevos_cargados = 0
+
+                if det_bandeja:
+                    for idx_item, item in enumerate(items_desempacados):
+                        f_obj = item["file_obj"]
+                        nombre_orig = item["nombre_original"]
+                        nombre_key = nombre_orig.strip().lower()
+                        if informe_ya_generado and nombre_key in nombres_existentes:
+                            continue
+                        nombres_existentes.add(nombre_key)
+
+                        ruta_rel = item["ruta_relativa"]
+                        tamano = item["tamano_bytes"]
+                        tipo = clasificar_tipo_archivo(nombre_orig)
+                        metadatos = extraer_metadatos_ligeros_archivo(f_obj, nombre_orig, ruta_relativa=ruta_rel)
+                        if hasattr(f_obj, "seek"):
+                            f_obj.seek(0)
+
+                        orden_actual = det_bandeja.archivos_evidencia.count() + 1
+                        ev = ArchivoEvidencia(
+                            detalle_obligacion=det_bandeja,
+                            orden=orden_actual,
+                            nombre_original=nombre_orig,
+                            tipo_archivo=tipo,
+                            tamano_bytes=tamano,
+                            titulo_evidencia="",
+                            descripcion_tecnica_ia="PENDIENTE_CLASIFICACION_IA",
+                            observacion_usuario=nota_masiva or "",
+                            metadatos_ligeros=metadatos,
+                        )
+                        ev.archivo.save(nombre_orig, f_obj, save=True)
+                        nuevos_cargados += 1
+
+                if nuevos_cargados > 0:
+                    msg_accion = "anexaron" if informe_ya_generado else "cargaron"
+                    messages.success(
+                        request,
+                        f"✓ Se {msg_accion} {nuevos_cargados} evidencias en la bandeja. Agrega tus observaciones en el visor y luego pulsa 'Redactar Cuenta de Cobro con IA'.",
+                    )
+                else:
+                    messages.info(
+                        request,
+                        "Visor de evidencias abierto. Agrega observaciones a tus soportes antes de redactar.",
+                    )
             return redirect(f"/informes/{informe.id}/?abrir_visor=1")
+
+        # =========================================================================
+        # FASE 2: REDACTAR CUENTA DE COBRO CON IA (AQUÍ SÍ SE ASIGNA Y REDACTA)
+        # =========================================================================
         elif modo == "redactar_ia_y_empaquetar":
+            resumen_acomodo = []
+
+            # 1. Si se adjuntaron archivos en este mismo clic de redacción
+            if archivos_masivos_raw:
+                items_desempacados = desempacar_archivos_subidos(archivos_masivos_raw)
+                det_bandeja = detalles_lista[0] if detalles_lista else None
+                if det_bandeja:
+                    for idx_item, item in enumerate(items_desempacados):
+                        f_obj = item["file_obj"]
+                        nombre_orig = item["nombre_original"]
+                        ruta_rel = item["ruta_relativa"]
+                        tamano = item["tamano_bytes"]
+                        tipo = clasificar_tipo_archivo(nombre_orig)
+                        metadatos = extraer_metadatos_ligeros_archivo(f_obj, nombre_orig, ruta_relativa=ruta_rel)
+                        if hasattr(f_obj, "seek"):
+                            f_obj.seek(0)
+                        ev = ArchivoEvidencia(
+                            detalle_obligacion=det_bandeja,
+                            orden=det_bandeja.archivos_evidencia.count() + 1,
+                            nombre_original=nombre_orig,
+                            tipo_archivo=tipo,
+                            tamano_bytes=tamano,
+                            titulo_evidencia="",
+                            descripcion_tecnica_ia="PENDIENTE_CLASIFICACION_IA",
+                            observacion_usuario=nota_masiva or "",
+                            metadatos_ligeros=metadatos,
+                        )
+                        ev.archivo.save(nombre_orig, f_obj, save=True)
+
+            # 2. Si el usuario escribió apuntes o commits generales, distribuirlos en las obligaciones
+            if apuntes_generales and detalles_lista:
+                lineas_apuntes = [ln.strip() for ln in apuntes_generales.splitlines() if ln.strip()]
+                for idx_ln, linea in enumerate(lineas_apuntes):
+                    det_destino = clasificar_obligacion_por_afinidad(linea, detalles_lista, indice_rotacion=idx_ln)
+                    if det_destino:
+                        actual = (det_destino.apuntes_contratista or "").strip()
+                        if linea not in actual:
+                            nuevo_txt = f"{actual}\n{linea}".strip() if actual else linea
+                            det_destino.apuntes_contratista = nuevo_txt[: informe.contratista.max_caracteres_apuntes]
+                            det_destino.save()
+
+            # 3. AHORA SÍ: Reasignar y clasificar TODAS las evidencias en sus obligaciones K
+            # tomando en cuenta las observaciones del visor escritas por el usuario
+            movimientos_reasignacion = reacomodar_todas_evidencias_informe(informe, detalles_lista)
+            if movimientos_reasignacion:
+                resumen_acomodo.extend(movimientos_reasignacion)
+                detalles_lista = list(
+                    informe.detalles_obligaciones.select_related("obligacion")
+                    .prefetch_related("archivos_evidencia")
+                    .order_by("obligacion__numero_obligacion")
+                )
+
+            # 4. Ejecutar la llamada a la IA para redactar el informe oficial GC-FO-15
             res_ia = redactar_informe_con_ia(
                 informe,
                 obligacion_especifica_id=None,
                 apuntes_generales_mes="",
-                ignorar_cache=True,  # Romper siempre el caché para regenerar con datos frescos
+                ignorar_cache=True,
             )
+
+            # 5. Construir los documentos Word y el paquete ZIP
             res_pkg = construir_paquete_completo_pago(informe)
-            extra_acomodo = f" ({len(resumen_acomodo)} archivos clasificados/reasignados)." if resumen_acomodo else ""
+            extra_acomodo = f" ({len(resumen_acomodo)} archivos organizados en sus obligaciones)." if resumen_acomodo else ""
             messages.success(
                 request,
-                f"¡Paquete completo generado! Se rompió el caché y la IA redactó las {res_pkg['total_obligaciones']} obligaciones en 1 sola pasada ({res_ia['motor_usado']}), "
-                f"creando los {res_pkg['total_documentos_word']} documentos Word y las carpetas Actividad_1..{res_pkg['total_obligaciones']}.{extra_acomodo} "
+                f"¡Paquete completo generado! La IA redactó las {res_pkg['total_obligaciones']} obligaciones ({res_ia['motor_usado']}) "
+                f"y organizó los soportes en las carpetas oficiales.{extra_acomodo} "
                 f"Créditos restantes: {res_ia['creditos_informe_completo']}.",
             )
-        else:
-            # Solo ensamblar el árbol de carpetas y los 2N+2 documentos Word con los textos actuales (0 créditos IA)
-            res_pkg = construir_paquete_completo_pago(informe)
-            messages.success(
-                request,
-                f"¡Árbol de carpetas y {res_pkg['total_documentos_word']} documentos Word ensamblados y comprimidos en .ZIP exitosamente (0 créditos consumidos)!",
-            )
+            return redirect(f"/informes/{informe.id}/")
+
     except Exception as exc:
-        messages.error(request, f"Error al construir el paquete del Pago {informe.numero_pago:02d}: {exc}")
+        messages.error(
+            request,
+            f"Ocurrió un error al procesar tu cuenta de cobro: {exc}",
+        )
+        return redirect("generador:detalle_informe", informe_id=informe.id)
 
-    return redirect("generador:detalle_informe", informe_id=informe.id)
-
+    return redirect(f"/informes/{informe.id}/")
 
 def descargar_zip_paquete(request, informe_id: int):
     """Descarga el archivo `.zip` con todo el árbol `1_DOCUMENTOS_CUENTA_DE_COBRO` y `2_CARPETA_NAS_EVIDENCIAS`."""

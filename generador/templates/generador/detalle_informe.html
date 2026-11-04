@@ -162,6 +162,29 @@
         </form>
     </div>
 
+    <!-- BANDEJA DE EVIDENCIAS: Visible cuando hay soportes pendientes de clasificar con IA -->
+    {% if total_evidencias_pendientes > 0 %}
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="space-y-1">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 block">
+                    📂 Bandeja de Evidencias (Sin Clasificar)
+                </span>
+                <h3 class="text-base sm:text-lg font-extrabold text-white">
+                    {{ total_evidencias_pendientes }} soporte{% if total_evidencias_pendientes != 1 %}s{% endif %} listo{% if total_evidencias_pendientes != 1 %}s{% endif %} para revisión
+                </h3>
+                <p class="text-xs text-slate-400">
+                    Abre el visor 1 a 1 para agregar notas y contexto a tus capturas. Al pulsar "Redactar Cuenta de Cobro con IA", el sistema las ubicará en la obligación correspondiente según tus notas.
+                </p>
+            </div>
+            <button type="button" onclick="abrirVisorEvidencia(null, 'pendientes')"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-2.5 rounded-2xl text-xs shadow-md transition flex items-center justify-center gap-2 shrink-0 cursor-pointer">
+                <span>👁️ Abrir Visor de Evidencias ({{ total_evidencias_pendientes }})</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Tus Obligaciones y Redacciones Listas -->
     <div class="space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -201,7 +224,7 @@
                                 {{ det.obligacion.descripcion_clausula }}
                             </span>
                             <span class="text-[11px] text-slate-400">
-                                <span class="contador-soportes-{{ det.id }}">{{ det.archivos_evidencia.count }}</span> soportes {% if det.texto_tabla_principal %}• <span class="text-emerald-400 font-semibold">✓ Redactada</span>{% else %}• <span class="text-slate-500">Pendiente</span>{% endif %}
+                                <span class="contador-soportes-{{ det.id }}">{{ det.evidencias_clasificadas_lista|length }}</span> soportes asignados {% if det.texto_tabla_principal %}• <span class="text-emerald-400 font-semibold">✓ Redactada</span>{% else %}• <span class="text-slate-500">Pendiente</span>{% endif %}
                             </span>
                         </div>
                     </div>
@@ -245,9 +268,9 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-semibold text-slate-300">
-                                        Soportes asignados (<span class="span-contador-{{ det.id }}">{{ det.archivos_evidencia.count }}</span>)
+                                        Soportes asignados (<span class="span-contador-{{ det.id }}">{{ det.evidencias_clasificadas_lista|length }}</span>)
                                     </span>
-                                    {% if det.archivos_evidencia.all %}
+                                    {% if det.evidencias_clasificadas_lista %}
                                     <button type="button" onclick="abrirVisorEvidencia(null, {{ det.obligacion.numero_obligacion }})"
                                             class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold px-2.5 py-0.5 rounded-lg text-[11px] transition flex items-center gap-1">
                                         <span>👁️ Visor 1 a 1</span>
@@ -260,8 +283,8 @@
                                 </a>
                             </div>
 
-                            <div id="contenedor-soportes-{{ det.id }}" class="space-y-2 max-h-56 overflow-y-auto pr-1 {% if not det.archivos_evidencia.all %}hidden{% endif %}">
-                                {% for ev in det.archivos_evidencia.all %}
+                            <div id="contenedor-soportes-{{ det.id }}" class="space-y-2 max-h-56 overflow-y-auto pr-1 {% if not det.evidencias_clasificadas_lista %}hidden{% endif %}">
+                                {% for ev in det.evidencias_clasificadas_lista %}
                                 <div id="fila-evidencia-{{ ev.id }}" class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 flex items-start justify-between gap-3 text-xs transition group">
                                     <div class="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer" onclick="abrirVisorEvidencia({{ ev.id }})" title="Clic para abrir en visor y agregar observación">
                                         {% if ev.es_confidencial_sin_archivo %}
@@ -522,9 +545,12 @@
                 <!-- Dropdown de filtro por obligación -->
                 <select id="visor-filtro-ob" onchange="cambiarFiltroObligacionVisor(this.value)"
                         class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500">
-                    <option value="todas">Todas las Obligaciones</option>
+                    <option value="todas">Todas las Evidencias ({{ total_evidencias_informe }})</option>
+                    {% if total_evidencias_pendientes > 0 %}
+                    <option value="pendientes">📂 Bandeja de Pendientes ({{ total_evidencias_pendientes }})</option>
+                    {% endif %}
                     {% for det in detalles %}
-                    <option value="{{ det.obligacion.numero_obligacion }}">Ob. {{ det.obligacion.numero_obligacion }} ({{ det.archivos_evidencia.count }} soportes)</option>
+                    <option value="{{ det.obligacion.numero_obligacion }}">Ob. {{ det.obligacion.numero_obligacion }} ({{ det.evidencias_clasificadas_lista|length }} asignadas)</option>
                     {% endfor %}
                 </select>
 
@@ -544,7 +570,7 @@
             <!-- Left Col (Col 7): Preview Area -->
             <div class="lg:col-span-7 flex flex-col gap-3 min-w-0">
                 <div class="flex items-center justify-between text-xs text-slate-400">
-                    <span id="visor-contador-slide" class="font-bold text-emerald-400">Evidencia 1 de 17</span>
+                    <span id="visor-contador-slide" class="font-bold text-slate-300">Evidencia 1 de 17</span>
                     <span id="visor-ob-tag" class="text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700 font-medium">Obligación 1</span>
                 </div>
 
@@ -581,10 +607,10 @@
             <div class="lg:col-span-5 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4">
                 <div class="space-y-3.5">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                            <span>🧠</span> Contexto para la IA
+                        <span class="text-xs font-bold text-slate-200">
+                            Contexto de la Evidencia
                         </span>
-                        <span id="visor-tipo-archivo" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                        <span id="visor-tipo-archivo" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60">
                             IMAGEN
                         </span>
                     </div>
@@ -601,7 +627,7 @@
                             <span>Observación / Actividad Ejecutada:</span>
                         </label>
                         <p class="text-[11px] text-slate-400 leading-snug">
-                            Describe en tus palabras qué demuestra este soporte (reunión, pantalla, corrección, commit, etc.). <strong>La IA tomará esta observación como fuente principal de verdad</strong> para redactar tu cuenta con precisión 5.0.
+                            Describe brevemente qué hiciste en este soporte para que la IA lo asocie a la obligación correcta y redacte tu informe formal.
                         </p>
                         <textarea id="visor-input-observacion" rows="6"
                                   placeholder="Ej: Se participó en la reunión de arquitectura técnica del 12 de octubre con el equipo de la OTI, donde se validó el modelo de base de datos..."
@@ -610,19 +636,22 @@
                     </div>
                 </div>
 
-                <div class="space-y-2 pt-2 border-t border-slate-800/80">
-                    <div class="flex items-center justify-between">
-                        <span id="visor-status-save" class="text-[11px] text-slate-400 flex items-center gap-1">
-                            Listo para editar
-                        </span>
-                        <button type="button" id="btn-guardar-obs-visor" onclick="guardarObservacionActualVisor()"
-                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5">
-                            <span>💾 Guardar para la IA</span>
+                <div class="space-y-2 pt-2 border-t border-slate-800">
+                    <div class="flex items-center justify-between gap-2">
+                        <button type="button" onclick="eliminarEvidenciaActualVisor()"
+                                class="text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
+                            <span>🗑️ Eliminar</span>
                         </button>
+                        <div class="flex items-center gap-2">
+                            <span id="visor-status-save" class="text-[11px] text-slate-400 flex items-center gap-1">
+                                Listo para editar
+                            </span>
+                            <button type="button" id="btn-guardar-obs-visor" onclick="guardarObservacionActualVisor()"
+                                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                                <span>💾 Guardar para la IA</span>
+                            </button>
+                        </div>
                     </div>
-                    <p class="text-[10px] text-slate-500 text-center">
-                        Tip: También se guarda automáticamente al cambiar de soporte o cerrar el visor.
-                    </p>
                 </div>
             </div>
         </div>
@@ -644,7 +673,8 @@
         if (urlParams.get('abrir_visor') === '1') {
             window.history.replaceState({}, document.title, window.location.pathname);
             setTimeout(() => {
-                abrirVisorEvidencia();
+                const tienePendientes = TODAS_EVIDENCIAS.some(e => e.es_pendiente);
+                abrirVisorEvidencia(null, tienePendientes ? 'pendientes' : 'todas');
                 mostrarToast('✓ Evidencias listas. Revisa tus archivos y coloca tus observaciones antes de redactar.');
             }, 250);
         }
@@ -804,10 +834,12 @@
     let indiceActual = 0;
     let observacionModificada = false;
 
-    function abrirVisorEvidencia(evidenciaId = null, numeroObligacion = null) {
+    function abrirVisorEvidencia(evidenciaId = null, filtro = null) {
         const selectOb = document.getElementById('visor-filtro-ob');
-        if (numeroObligacion) {
-            selectOb.value = String(numeroObligacion);
+        if (filtro === 'pendientes') {
+            selectOb.value = 'pendientes';
+        } else if (filtro) {
+            selectOb.value = String(filtro);
         } else if (!selectOb.value) {
             selectOb.value = 'todas';
         }
@@ -845,9 +877,11 @@
     function cambiarFiltroObligacionVisor(valor, reRender = true) {
         if (valor === 'todas') {
             evidenciasFiltradas = [...TODAS_EVIDENCIAS];
+        } else if (valor === 'pendientes') {
+            evidenciasFiltradas = TODAS_EVIDENCIAS.filter(e => e.es_pendiente);
         } else {
             const num = parseInt(valor, 10);
-            evidenciasFiltradas = TODAS_EVIDENCIAS.filter(e => e.numero_obligacion === num);
+            evidenciasFiltradas = TODAS_EVIDENCIAS.filter(e => !e.es_pendiente && e.numero_obligacion === num);
         }
         indiceActual = 0;
         if (reRender) {
@@ -881,7 +915,14 @@
         document.getElementById('visor-status-save').innerHTML = '<span class="text-slate-400">Listo para editar</span>';
 
         document.getElementById('visor-contador-slide').textContent = `Evidencia ${indiceActual + 1} de ${evidenciasFiltradas.length}`;
-        document.getElementById('visor-ob-tag').textContent = `Obligación ${ev.numero_obligacion}`;
+        const obTag = document.getElementById('visor-ob-tag');
+        if (ev.es_pendiente) {
+            obTag.textContent = 'Bandeja • Pendiente de Clasificar con IA';
+            obTag.className = 'text-emerald-400 bg-emerald-950/70 px-2.5 py-0.5 rounded-lg border border-emerald-800/60 font-medium';
+        } else {
+            obTag.textContent = `Obligación ${ev.numero_obligacion}`;
+            obTag.className = 'text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700 font-medium';
+        }
         document.getElementById('visor-nombre-archivo').textContent = ev.nombre_original;
         document.getElementById('visor-tipo-archivo').textContent = ev.tipo_archivo;
 
@@ -1001,6 +1042,59 @@
             statusEl.innerHTML = `<span class="text-slate-300 font-semibold">Error: ${err.message}</span>`;
         } finally {
             btnGuardar.disabled = false;
+        }
+    }
+
+    async function eliminarEvidenciaActualVisor() {
+        if (!evidenciasFiltradas || evidenciasFiltradas.length === 0) return;
+        const ev = evidenciasFiltradas[indiceActual];
+        if (!ev) return;
+
+        if (!confirm(`¿Estás seguro de eliminar el soporte "${ev.nombre_original}"?`)) {
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', _obtenerCSRFToken());
+
+            const res = await fetch(`/evidencias/${ev.id}/eliminar/`, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.ok) {
+                mostrarToast(`✓ Soporte "${ev.nombre_original}" eliminado.`);
+
+                const idxGlobal = TODAS_EVIDENCIAS.findIndex(item => item.id === ev.id);
+                if (idxGlobal !== -1) {
+                    TODAS_EVIDENCIAS.splice(idxGlobal, 1);
+                }
+                evidenciasFiltradas.splice(indiceActual, 1);
+
+                const fila = document.getElementById(`fila-evidencia-${ev.id}`);
+                if (fila) fila.remove();
+
+                const badgeGlobal = document.getElementById('total-evidencias-badge');
+                if (badgeGlobal) badgeGlobal.textContent = TODAS_EVIDENCIAS.length;
+
+                observacionModificada = false;
+
+                if (evidenciasFiltradas.length === 0) {
+                    renderSlideActual();
+                } else {
+                    if (indiceActual >= evidenciasFiltradas.length) {
+                        indiceActual = evidenciasFiltradas.length - 1;
+                    }
+                    renderSlideActual();
+                }
+            } else {
+                mostrarToast('No se pudo eliminar el soporte.', 'error');
+            }
+        } catch (err) {
+            console.error('Error al eliminar evidencia:', err);
+            mostrarToast('Error de red al eliminar.', 'error');
         }
     }
 
